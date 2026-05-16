@@ -9,16 +9,24 @@ public class client{
             //connect to server
             Socket socket = new Socket("localhost", 5000);
 
+            System.out.println("sent the text to server");
             //sending message to server
             PrintWriter output = new PrintWriter(socket.getOutputStream() , true);
             
             String msg = sc.nextLine();
             output.println(msg);
             
-            System.out.println("MESSAGE SENT TO CLIENT ");
+            System.out.println("MESSAGE SENT TO Server ");
+
+            //reading server
+            BufferedReader input = new BufferedReader( new InputStreamReader(socket.getInputStream()));
+        
+            String message = input.readLine();
+            System.out.println("the client said : "+ message);
 
             socket.close();
             output.close();
+            input.close();
         }
         catch(Exception e){
             System.out.println(e);

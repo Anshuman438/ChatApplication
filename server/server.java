@@ -1,9 +1,12 @@
 import java.io.*;
 import java.net.*;
+import java.util.Scanner;
 
 public class server{
     public static void main(String args []){
         try{
+
+        Scanner sc = new Scanner(System.in);
         //creating a port for my connection at 5000
         ServerSocket serverSocket = new ServerSocket(5000);
 
@@ -26,9 +29,18 @@ public class server{
 
         System.out.println("the client said : "+ message);
 
+        
+        //reply to client
+        PrintWriter reply = new PrintWriter(socket.getOutputStream() , true);
+        System.out.println("say something to client");
+        String msg = sc.nextLine();
+        reply.println(msg);
+        
+
         //now close all the connections 
 
         input.close();
+        reply.close();
         serverSocket.close();
         socket.close();
         }
