@@ -16,27 +16,32 @@ public class server{
         Socket socket = serverSocket.accept();
 
         System.out.println("client got connected");
-
+        
         BufferedReader input = new BufferedReader( new InputStreamReader(socket.getInputStream()));
         
         //socket.getInputStream()  -> this takes the input from the client
         //InputStreamReader()      -> this make the input readable to computer 
         //BufferedReader()         -> this give useful futons like Readline() and all
 
+            
+        //reply to client
+        PrintWriter reply = new PrintWriter(socket.getOutputStream() , true);
+
+        while(true){
 
         //store the input 
         String message = input.readLine();
+        // Exit condition
+         if (message.equalsIgnoreCase("exit")) {
+                    System.out.println("Client disconnected.");
+                    break;
+        }
+        System.out.print("client : "+ message +"\n");
 
-        System.out.println("the client said : "+ message);
-
-        
-        //reply to client
-        PrintWriter reply = new PrintWriter(socket.getOutputStream() , true);
-        System.out.println("say something to client");
+        System.out.print("you :");
         String msg = sc.nextLine();
         reply.println(msg);
-        
-
+        }
         //now close all the connections 
 
         input.close();
@@ -44,7 +49,6 @@ public class server{
         serverSocket.close();
         socket.close();
         }
-
         catch (IOException e) {
 
             System.out.println("Error: " + e);
