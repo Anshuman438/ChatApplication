@@ -210,6 +210,11 @@ public class ClientGUI {
                 }
             };
 
+            if (uri.getScheme() != null && uri.getScheme().equalsIgnoreCase("wss")) {
+                javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getDefault();
+                wsClient.setSocketFactory(sslContext.getSocketFactory());
+            }
+
             wsClient.connect();
 
         } catch (Exception e) {
@@ -344,7 +349,7 @@ public class ClientGUI {
                     ? args[1].trim() : null;
 
             if (initialUser != null) {
-                String server = initialServer != null ? initialServer : DEFAULT_LOCAL_SERVER;
+                String server = initialServer != null ? initialServer : DEFAULT_PRODUCTION_SERVER;
                 new ClientGUI(initialUser, server);
                 return;
             }
@@ -352,11 +357,11 @@ public class ClientGUI {
             // Connection Dialog
             JPanel panel = new JPanel(new GridLayout(4, 1, 5, 5));
             JTextField userField = new JTextField();
-            JTextField serverField = new JTextField(DEFAULT_LOCAL_SERVER);
+            JTextField serverField = new JTextField(DEFAULT_PRODUCTION_SERVER);
 
             panel.add(new JLabel("Enter your Username:"));
             panel.add(userField);
-            panel.add(new JLabel("Server URL (e.g., wss://chat.itsanshuman.dev/ws or ws://localhost:8080):"));
+            panel.add(new JLabel("Server URL (Live Cloud Server):"));
             panel.add(serverField);
 
             int result = JOptionPane.showConfirmDialog(null, panel, "Chat Application Login",
@@ -371,7 +376,7 @@ public class ClientGUI {
                     return;
                 }
                 if (server.isEmpty()) {
-                    server = DEFAULT_LOCAL_SERVER;
+                    server = DEFAULT_PRODUCTION_SERVER;
                 }
 
                 new ClientGUI(user, server);
