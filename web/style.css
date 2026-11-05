@@ -93,7 +93,7 @@ input::placeholder {
 }
 
 /* ============================================================
-   Login Modal
+   Modals (Login & Profile Identity)
    ============================================================ */
 
 .modal-overlay {
@@ -123,6 +123,7 @@ input::placeholder {
   max-width: 420px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
   text-align: center;
+  position: relative;
 }
 
 .logo-circle {
@@ -213,6 +214,168 @@ input::placeholder {
 .modal-footer .download-link {
   color: #818cf8;
   font-weight: 500;
+}
+
+/* Profile Card Modal Details */
+.profile-card-modal {
+  max-width: 440px;
+  text-align: left;
+}
+
+.modal-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modal-header-row h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.close-modal-btn {
+  font-size: 16px;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-modal-btn:hover {
+  background: var(--bg-card);
+  color: #fff;
+}
+
+.profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
+  margin-bottom: 18px;
+}
+
+.avatar-lg {
+  width: 54px;
+  height: 54px;
+  font-size: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  flex: none;
+}
+
+.profile-name-tag {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-display-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.profile-tag-pill {
+  font-size: 12px;
+  font-weight: 600;
+  color: #A3B1FF;
+  background: rgba(79, 91, 213, 0.2);
+  padding: 2px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.profile-detail-box {
+  background: #11141B;
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+
+.detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.detail-row code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13.5px;
+  color: var(--online-green);
+  background: rgba(74, 222, 156, 0.08);
+  padding: 4px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+}
+
+.btn-copy-id {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-btn);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.btn-copy-id:hover {
+  background: #232a3b;
+  color: #fff;
+}
+
+.detail-note {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  line-height: 1.45;
+}
+
+.profile-actions-footer {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: center;
+}
+
+.btn-danger-outline {
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.btn-danger-outline:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
 }
 
 /* ============================================================
@@ -641,7 +804,7 @@ input::placeholder {
   color: #fff;
 }
 
-/* Sidebar Footer Profile Card */
+/* Sidebar Footer Profile Card (Desktop) */
 .current-user-card {
   display: flex;
   align-items: center;
@@ -649,6 +812,11 @@ input::placeholder {
   padding: 14px 16px;
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-sidebar);
+  transition: background-color 0.15s ease;
+}
+
+.current-user-card:hover {
+  background: var(--bg-card);
 }
 
 .current-user-card .my-avatar {
@@ -1024,7 +1192,7 @@ input::placeholder {
 }
 
 /* ============================================================
-   Mobile Navigation & Responsive Views (Exact match for mockups)
+   Mobile Navigation & Responsive Views
    ============================================================ */
 
 /* Mobile Inbox Header */

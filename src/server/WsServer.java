@@ -7,7 +7,7 @@ import org.java_websocket.server.WebSocketServer;
 import java.net.InetSocketAddress;
 
 /**
- * WebSocket Server listening on port 8080.
+ * WebSocket Server listening on port 8081.
  * Bridges browser and desktop WebSocket clients into the central Server.
  */
 public class WsServer extends WebSocketServer {
@@ -36,12 +36,22 @@ public class WsServer extends WebSocketServer {
         if (session == null) return;
 
         if (session.getUsername() == null) {
-            String name = message != null ? message.trim() : "";
-            if (!name.isEmpty() && Server.isValidUsername(name)) {
-                Server.handleClientConnected(session, name);
-            } else {
-                conn.close();
+            String msg = message != null ? message.trim() : "";
+            if (msg.startsWith("IDENTIFY:")) {
+                String[] parts = msg.split(":", 3);
+                if (parts.length >= 3) {
+                    String userId = parts[1].trim();
+                    String username = parts[2].trim();
+                    if (Server.isValidUsername(username)) {
+                        Server.handleClientConnected(session, userId, username);
+                        return;
+                    }
+                }
+            } else if (!msg.isEmpty() && Server.isValidUsername(msg)) {
+                Server.handleClientConnected(session, msg, msg);
+                return;
             }
+            conn.close();
         } else {
             Server.handleIncomingMessage(session, message);
         }

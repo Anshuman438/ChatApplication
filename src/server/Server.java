@@ -8,6 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Central Chat Server managing both TCP and WebSocket clients.
+ * Supports persistent user profiles and seamless page-refresh reconnection.
  */
 public class Server {
 
@@ -74,19 +75,45 @@ public class Server {
     }
 
     /**
-     * Called when a client successfully identifies with a username.
+     * Called when a client identifies with a username (backward compatible).
      */
     public static void handleClientConnected(ChatSession session, String username) {
+        handleClientConnected(session, username, username);
+    }
+
+    /**
+     * Called when a client identifies with both a persistent unique userId and a display username.
+     */
+    public static void handleClientConnected(ChatSession session, String userId, String username) {
         if (!isValidUsername(username)) {
             session.close();
             return;
         }
 
+        // Check if an existing session is already active for this userId or username
+        ChatSession existing = findClientByUserId(userId);
+        if (existing == null) {
+            existing = findClient(username);
+        }
+
+        boolean isReconnect = false;
+        if (existing != null && existing != session) {
+            System.out.println("🔄 " + username + " (" + userId + ") reconnected. Replacing session.");
+            clients.remove(existing);
+            existing.close();
+            isReconnect = true;
+        }
+
+        session.setUserId(userId != null ? userId : username);
         session.setUsername(username);
         clients.add(session);
 
-        System.out.println("🟢 " + username + " joined the chat. (Total: " + clients.size() + ")");
-        broadcast("🟢 " + username + " joined the chat");
+        if (!isReconnect) {
+            System.out.println("🟢 " + username + " joined the chat. (Total: " + clients.size() + ")");
+            broadcast("🟢 " + username + " joined the chat");
+        }
+
+        session.sendMessage("WELCOME:" + session.getUserId() + ":" + username);
         updateUserLists();
     }
 
@@ -160,23 +187,45 @@ public class Server {
     }
 
     /**
-     * Remove disconnected client and broadcast leave notification.
+     * Remove disconnected client and broadcast leave notification unless already reconnected.
      */
     public static void removeClient(ChatSession client) {
         if (clients.remove(client)) {
             String username = client.getUsername();
+            String userId = client.getUserId();
             if (username != null) {
-                System.out.println("🔴 " + username + " disconnected. (Total: " + clients.size() + ")");
-                broadcast("🔴 " + username + " left the chat");
-                updateUserLists();
+                // Check if user is still active on another session (e.g. fast page refresh)
+                ChatSession active = findClientByUserId(userId);
+                if (active == null) {
+                    active = findClient(username);
+                }
+                if (active == null) {
+                    System.out.println("🔴 " + username + " disconnected. (Total: " + clients.size() + ")");
+                    broadcast("🔴 " + username + " left the chat");
+                    updateUserLists();
+                }
             }
         }
+    }
+
+    /**
+     * Find a connected user by persistent userId.
+     */
+    public static ChatSession findClientByUserId(String userId) {
+        if (userId == null) return null;
+        for (ChatSession client : clients) {
+            if (userId.equals(client.getUserId())) {
+                return client;
+            }
+        }
+        return null;
     }
 
     /**
      * Find a connected user by username.
      */
     public static ChatSession findClient(String username) {
+        if (username == null) return null;
         for (ChatSession client : clients) {
             if (client.getUsername() != null && client.getUsername().equalsIgnoreCase(username)) {
                 return client;

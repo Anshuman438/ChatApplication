@@ -14,6 +14,7 @@ public class ClientHandler extends Thread implements ChatSession {
     private final Socket socket;
     private BufferedReader input;
     private PrintWriter output;
+    private String userId;
     private String username;
     private volatile boolean running = true;
 
@@ -25,6 +26,16 @@ public class ClientHandler extends Thread implements ChatSession {
         } catch (IOException e) {
             System.out.println("TCP ClientHandler Error : " + e.getMessage());
         }
+    }
+
+    @Override
+    public String getUserId() {
+        return userId != null ? userId : username;
+    }
+
+    @Override
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
     @Override
@@ -62,18 +73,18 @@ public class ClientHandler extends Thread implements ChatSession {
     @Override
     public void run() {
         try {
-            String initialName = input.readLine();
-            if (initialName == null || initialName.trim().isEmpty()) {
+            String initialMessage = input.readLine();
+            if (initialMessage == null || initialMessage.trim().isEmpty()) {
                 return;
             }
-            initialName = initialName.trim();
+            initialMessage = initialMessage.trim();
 
-            // Detect HTTP probe / health check (e.g. Render / Cloudflare health checks)
-            if (initialName.startsWith("GET ") ||
-                initialName.startsWith("HEAD ") ||
-                initialName.startsWith("POST ") ||
-                initialName.startsWith("OPTIONS ") ||
-                initialName.contains("HTTP/")) {
+            // Detect HTTP probe / health check
+            if (initialMessage.startsWith("GET ") ||
+                initialMessage.startsWith("HEAD ") ||
+                initialMessage.startsWith("POST ") ||
+                initialMessage.startsWith("OPTIONS ") ||
+                initialMessage.contains("HTTP/")) {
                 if (output != null) {
                     output.print("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK");
                     output.flush();
@@ -81,11 +92,23 @@ public class ClientHandler extends Thread implements ChatSession {
                 return;
             }
 
-            if (!Server.isValidUsername(initialName)) {
+            // Check if identity handshake
+            if (initialMessage.startsWith("IDENTIFY:")) {
+                String[] parts = initialMessage.split(":", 3);
+                if (parts.length >= 3) {
+                    String uid = parts[1].trim();
+                    String uname = parts[2].trim();
+                    if (Server.isValidUsername(uname)) {
+                        Server.handleClientConnected(this, uid, uname);
+                    } else {
+                        return;
+                    }
+                }
+            } else if (Server.isValidUsername(initialMessage)) {
+                Server.handleClientConnected(this, initialMessage, initialMessage);
+            } else {
                 return;
             }
-
-            Server.handleClientConnected(this, initialName);
 
             String message;
             while (running && (message = input.readLine()) != null) {

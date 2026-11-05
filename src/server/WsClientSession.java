@@ -7,10 +7,21 @@ import org.java_websocket.WebSocket;
  */
 public class WsClientSession implements ChatSession {
     private final WebSocket webSocket;
+    private String userId;
     private String username;
 
     public WsClientSession(WebSocket webSocket) {
         this.webSocket = webSocket;
+    }
+
+    @Override
+    public String getUserId() {
+        return userId != null ? userId : username;
+    }
+
+    @Override
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
     @Override

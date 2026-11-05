@@ -1,10 +1,21 @@
-// Real-Time Chat Web Client (Mobile & Desktop Responsive)
+// Real-Time Chat Web Client (Persistent User Profile & Reconnection)
 (function () {
   let ws = null;
-  let username = "";
   let currentChat = "GROUP"; // "GROUP" or username for direct message
 
-  const chatHistory = {
+  const STORAGE_KEY_PROFILE = "chatapp_user_profile";
+  const STORAGE_KEY_HISTORY = "chatapp_history";
+
+  // Persistent User Profile State
+  let userProfile = {
+    userId: null,
+    username: "",
+    tag: "",
+    avatarColor: "#4F5BD5",
+    avatarTextColor: "#FFFFFF"
+  };
+
+  let chatHistory = {
     GROUP: []
   };
   const unreadCounts = {};
@@ -12,7 +23,7 @@
   let isTyping = false;
   let activeUsers = [];
 
-  // Deterministic avatar color palette matching redesign
+  // Deterministic avatar color palette
   const AVATAR_PALETTE = [
     { bg: "#E8B04F", text: "#241803" }, // Amber
     { bg: "#3FB68B", text: "#04170F" }, // Emerald
@@ -40,7 +51,9 @@
   const usernameInput = document.getElementById("username-input");
   const connectionStatus = document.getElementById("connection-status");
   const myUsernameEl = document.getElementById("my-username");
+  const myUserTagEl = document.getElementById("my-user-tag");
   const myAvatarEl = document.getElementById("my-avatar");
+  const desktopUserCard = document.getElementById("desktop-user-card");
   const groupChannelBtn = document.getElementById("group-channel-btn");
   const groupLastSnippet = document.getElementById("group-last-snippet");
   const onlineUsersList = document.getElementById("online-users-list");
@@ -57,6 +70,19 @@
   const btnEmoji = document.getElementById("btn-emoji");
   const emojiPopover = document.getElementById("emoji-popover");
   const btnSettings = document.getElementById("btn-settings");
+  const btnChatOptions = document.getElementById("btn-chat-options");
+
+  // Profile Modal Elements
+  const profileModal = document.getElementById("profile-modal");
+  const btnCloseProfile = document.getElementById("btn-close-profile");
+  const modalAvatar = document.getElementById("modal-avatar");
+  const modalDisplayName = document.getElementById("modal-display-name");
+  const modalTagPill = document.getElementById("modal-tag-pill");
+  const modalUserId = document.getElementById("modal-user-id");
+  const btnCopyId = document.getElementById("btn-copy-id");
+  const editProfileForm = document.getElementById("edit-profile-form");
+  const editNicknameInput = document.getElementById("edit-nickname-input");
+  const btnResetProfile = document.getElementById("btn-reset-profile");
 
   // Mobile Navigation Elements
   const mobileBackBtn = document.getElementById("mobile-back-btn");
@@ -65,6 +91,99 @@
   const navProfileTab = document.getElementById("nav-profile-tab");
   const navProfileUsername = document.getElementById("nav-profile-username");
   const navUnreadRooms = document.getElementById("nav-unread-rooms");
+
+  // Load Saved Chat History from localStorage
+  try {
+    const savedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
+    if (savedHistory) {
+      chatHistory = JSON.parse(savedHistory);
+      if (!chatHistory.GROUP) chatHistory.GROUP = [];
+    }
+  } catch (e) {
+    console.warn("Failed to load saved history:", e);
+  }
+
+  // Load or Initialize Persistent User Profile
+  function loadOrCreateProfile() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_PROFILE);
+      if (saved) {
+        userProfile = JSON.parse(saved);
+        if (userProfile && userProfile.userId && userProfile.username) {
+          applyProfileToUI();
+          loginModal.classList.add("hidden");
+          connectWebSocket();
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn("Error reading profile:", e);
+    }
+    // Show first-time login modal
+    loginModal.classList.remove("hidden");
+    return false;
+  }
+
+  function createNewProfile(chosenName) {
+    const randomHex = Math.random().toString(36).substring(2, 9);
+    const userId = "usr_" + randomHex;
+    const tag = "#" + Math.floor(1000 + Math.random() * 9000);
+    const colors = getAvatarColors(chosenName);
+
+    userProfile = {
+      userId: userId,
+      username: chosenName,
+      tag: tag,
+      avatarColor: colors.bg,
+      avatarTextColor: colors.text
+    };
+
+    saveProfile();
+    applyProfileToUI();
+    loginModal.classList.add("hidden");
+    connectWebSocket();
+  }
+
+  function saveProfile() {
+    try {
+      localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(userProfile));
+    } catch (e) {
+      console.warn("Error saving profile to localStorage:", e);
+    }
+  }
+
+  function applyProfileToUI() {
+    const name = userProfile.username || "Guest";
+    const tag = userProfile.tag || "";
+    const colors = getAvatarColors(name);
+
+    if (myUsernameEl) myUsernameEl.textContent = name;
+    if (myUserTagEl) myUserTagEl.textContent = `${tag} · Online`;
+    if (navProfileUsername) navProfileUsername.textContent = name;
+
+    if (myAvatarEl) {
+      myAvatarEl.textContent = name.charAt(0).toUpperCase();
+      myAvatarEl.style.backgroundColor = colors.bg;
+      myAvatarEl.style.color = colors.text;
+    }
+
+    // Update Profile Modal fields
+    if (modalAvatar) {
+      modalAvatar.textContent = name.charAt(0).toUpperCase();
+      modalAvatar.style.backgroundColor = colors.bg;
+      modalAvatar.style.color = colors.text;
+    }
+    if (modalDisplayName) modalDisplayName.textContent = name;
+    if (modalTagPill) modalTagPill.textContent = tag;
+    if (modalUserId) modalUserId.textContent = userProfile.userId;
+    if (editNicknameInput) editNicknameInput.value = name;
+  }
+
+  function persistHistory() {
+    try {
+      localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(chatHistory));
+    } catch (e) {}
+  }
 
   // Determine WebSocket Endpoint
   function getWebSocketUrl() {
@@ -77,27 +196,18 @@
     return `${protocol}//${window.location.host}/ws`;
   }
 
-  // Handle Login
+  // Handle Initial Nickname Form Submit
   loginForm.addEventListener("submit", function (e) {
     e.preventDefault();
     const name = usernameInput.value.trim();
     if (!name) return;
-
-    username = name;
-    myUsernameEl.textContent = username;
-    if (navProfileUsername) navProfileUsername.textContent = username;
-
-    const colors = getAvatarColors(username);
-    myAvatarEl.textContent = username.charAt(0).toUpperCase();
-    myAvatarEl.style.backgroundColor = colors.bg;
-    myAvatarEl.style.color = colors.text;
-
-    loginModal.classList.add("hidden");
-    connectWebSocket();
+    createNewProfile(name);
   });
 
-  // Connect WebSocket
+  // Connect WebSocket with Persistent User Identity
   function connectWebSocket() {
+    if (!userProfile.userId || !userProfile.username) return;
+
     const url = getWebSocketUrl();
     updateStatus("Connecting...", "connecting");
 
@@ -106,8 +216,8 @@
 
       ws.onopen = function () {
         updateStatus("Connected", "connected");
-        // Send initial username handshake
-        ws.send(username);
+        // Handshake with permanent userId & username: "IDENTIFY:userId:username"
+        ws.send(`IDENTIFY:${userProfile.userId}:${userProfile.username}`);
       };
 
       ws.onmessage = function (event) {
@@ -116,10 +226,10 @@
 
       ws.onclose = function () {
         updateStatus("Disconnected", "disconnected");
-        // Auto-reconnect after 3 seconds
+        // Auto-reconnect after 2.5 seconds
         setTimeout(() => {
-          if (username) connectWebSocket();
-        }, 3000);
+          if (userProfile.username) connectWebSocket();
+        }, 2500);
       };
 
       ws.onerror = function () {
@@ -147,10 +257,16 @@
       return;
     }
 
+    // 0. Server WELCOME Handshake
+    if (raw.startsWith("WELCOME:")) {
+      console.log("Server session authenticated:", raw);
+      return;
+    }
+
     // 1. TYPING Notification: "TYPING:username"
     if (raw.startsWith("TYPING:")) {
       const sender = raw.substring(7).trim();
-      if (sender.toLowerCase() !== username.toLowerCase()) {
+      if (sender.toLowerCase() !== userProfile.username.toLowerCase()) {
         if (currentChat === sender || (currentChat === "GROUP")) {
           showTyping(sender);
         }
@@ -214,7 +330,7 @@
         sender: sender,
         text: text,
         time: time,
-        type: sender.toLowerCase() === username.toLowerCase() ? "me" : "other"
+        type: sender.toLowerCase() === userProfile.username.toLowerCase() ? "me" : "other"
       });
 
       if (currentChat !== "GROUP") {
@@ -236,6 +352,7 @@
       chatHistory[chatKey] = [];
     }
     chatHistory[chatKey].push(msgObj);
+    persistHistory();
   }
 
   function renderMessages() {
@@ -311,7 +428,7 @@
       .split(",")
       .map(u => u.trim())
       .filter(u => u.length > 0 && 
-                   u.toLowerCase() !== username.toLowerCase() && 
+                   u.toLowerCase() !== userProfile.username.toLowerCase() && 
                    !u.includes("HTTP/") && 
                    !u.includes("Go-http-client"));
 
@@ -467,12 +584,96 @@
     });
   }
 
+  // Profile Modal Event Listeners
+  function openProfileModal() {
+    applyProfileToUI();
+    profileModal.classList.remove("hidden");
+  }
+
+  function closeProfileModal() {
+    profileModal.classList.add("hidden");
+  }
+
   if (navProfileTab) {
     navProfileTab.addEventListener("click", function () {
       setActiveNavTab(navProfileTab);
-      if (confirm(`Signed in as "${username}". Would you like to change your nickname?`)) {
+      openProfileModal();
+    });
+  }
+
+  if (btnSettings) {
+    btnSettings.addEventListener("click", function (e) {
+      e.stopPropagation();
+      openProfileModal();
+    });
+  }
+
+  if (desktopUserCard) {
+    desktopUserCard.addEventListener("click", function () {
+      openProfileModal();
+    });
+  }
+
+  if (btnChatOptions) {
+    btnChatOptions.addEventListener("click", function () {
+      openProfileModal();
+    });
+  }
+
+  if (btnCloseProfile) {
+    btnCloseProfile.addEventListener("click", closeProfileModal);
+  }
+
+  if (profileModal) {
+    profileModal.addEventListener("click", function (e) {
+      if (e.target === profileModal) closeProfileModal();
+    });
+  }
+
+  // Copy User ID
+  if (btnCopyId) {
+    btnCopyId.addEventListener("click", function () {
+      if (userProfile.userId) {
+        navigator.clipboard.writeText(userProfile.userId).then(() => {
+          btnCopyId.textContent = "Copied!";
+          setTimeout(() => { btnCopyId.textContent = "Copy"; }, 2000);
+        }).catch(() => {
+          btnCopyId.textContent = "Copied!";
+          setTimeout(() => { btnCopyId.textContent = "Copy"; }, 2000);
+        });
+      }
+    });
+  }
+
+  // Edit Nickname
+  if (editProfileForm) {
+    editProfileForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      const newName = editNicknameInput.value.trim();
+      if (!newName) return;
+
+      userProfile.username = newName;
+      saveProfile();
+      applyProfileToUI();
+
+      // Re-identify with the server
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(`IDENTIFY:${userProfile.userId}:${userProfile.username}`);
+      }
+
+      closeProfileModal();
+    });
+  }
+
+  // Switch Account / Create New Profile
+  if (btnResetProfile) {
+    btnResetProfile.addEventListener("click", function () {
+      if (confirm("Are you sure you want to switch accounts? This will generate a new user identity.")) {
+        localStorage.removeItem(STORAGE_KEY_PROFILE);
         if (ws) ws.close();
+        closeProfileModal();
         loginModal.classList.remove("hidden");
+        usernameInput.value = "";
         usernameInput.focus();
       }
     });
@@ -542,17 +743,6 @@
     });
   }
 
-  // Settings / Reconnect button (Desktop footer)
-  if (btnSettings) {
-    btnSettings.addEventListener("click", function () {
-      if (confirm(`Currently signed in as "${username}". Would you like to change your nickname?`)) {
-        if (ws) ws.close();
-        loginModal.classList.remove("hidden");
-        usernameInput.focus();
-      }
-    });
-  }
-
   // Utilities
   function formatTime(date) {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -567,5 +757,9 @@
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
   }
+
+  // Initialize: Load existing profile from localStorage or prompt for first time
+  loadOrCreateProfile();
+  renderMessages();
 
 })();

@@ -4,22 +4,24 @@ import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
 import javax.swing.*;
-import javax.swing.border.AbstractBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
-import java.io.StringReader;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.net.URI;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.prefs.Preferences;
 
 public class ClientGUI {
 
@@ -86,11 +88,14 @@ public class ClientGUI {
     private JLabel chatSubtitle;
     private JLabel typingLabel;
     private JLabel statusPill;
+    private JLabel userBadge;
+    private JLabel myNameLabel;
     private JPanel activeAvatarPanel;
     private Timer typingTimer;
     private boolean isTyping = false;
 
-    private final String username;
+    private final String userId;
+    private String username;
     private final String serverUri;
     private String currentChat = "GROUP";
 
@@ -118,7 +123,8 @@ public class ClientGUI {
         }
     }
 
-    public ClientGUI(String username, String serverUri) {
+    public ClientGUI(String userId, String username, String serverUri) {
+        this.userId = userId;
         this.username = username;
         this.serverUri = serverUri;
 
@@ -194,14 +200,16 @@ public class ClientGUI {
         JPanel topRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 16, 15));
         topRight.setOpaque(false);
 
-        JLabel serverLabel = new JLabel("Server: " + serverUri);
-        serverLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        serverLabel.setForeground(TEXT_MUTED);
-        topRight.add(serverLabel);
-
-        JLabel userBadge = new JLabel("Signed in as " + username);
-        userBadge.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        userBadge = new JLabel("👤 " + username + " (" + userId + ") [Edit]");
+        userBadge.setFont(new Font("Segoe UI", Font.BOLD, 12));
         userBadge.setForeground(TEXT_PRIMARY);
+        userBadge.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        userBadge.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                showProfileDialog();
+            }
+        });
         topRight.add(userBadge);
 
         topBar.add(topRight, BorderLayout.EAST);
@@ -270,21 +278,28 @@ public class ClientGUI {
         // Current User Profile Card at Sidebar Bottom
         JPanel userFooter = new JPanel(new BorderLayout(12, 0));
         userFooter.setBackground(BG_SIDEBAR);
+        userFooter.setCursor(new Cursor(Cursor.HAND_CURSOR));
         userFooter.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 0, 0, BORDER_SUBTLE),
                 new EmptyBorder(12, 16, 12, 16)
         ));
+        userFooter.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                showProfileDialog();
+            }
+        });
 
         JPanel myAvatar = new RoundedAvatarPanel(username.substring(0, 1).toUpperCase(), getAvatarColor(username), 40, true);
         userFooter.add(myAvatar, BorderLayout.WEST);
 
         JPanel myMeta = new JPanel(new GridLayout(2, 1, 0, 2));
         myMeta.setOpaque(false);
-        JLabel myNameLabel = new JLabel(username);
+        myNameLabel = new JLabel(username);
         myNameLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         myNameLabel.setForeground(TEXT_PRIMARY);
-        JLabel myStatusLabel = new JLabel("Online");
-        myStatusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        JLabel myStatusLabel = new JLabel("Online · Click to edit profile");
+        myStatusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         myStatusLabel.setForeground(COLOR_ONLINE);
         myMeta.add(myNameLabel);
         myMeta.add(myStatusLabel);
@@ -317,7 +332,7 @@ public class ClientGUI {
 
         chatSubtitle = new JLabel("Public broadcast room for all connected web & desktop users");
         chatSubtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        chatSubtitle.setForeground(TEXT_SECONDARY);
+        chatSubtitle.setForeground(COLOR_ONLINE);
 
         titleBlock.add(chatTitle);
         titleBlock.add(chatSubtitle);
@@ -451,8 +466,8 @@ public class ClientGUI {
                         statusPill.setText("● Connected");
                         statusPill.setForeground(COLOR_ONLINE);
                     });
-                    // Initial username handshake
-                    send(username);
+                    // Handshake with permanent userId & username
+                    send("IDENTIFY:" + userId + ":" + username);
                 }
 
                 @Override
@@ -494,6 +509,10 @@ public class ClientGUI {
 
         // Filter health checks / bot headers
         if (message.contains("HTTP/") || message.contains("Go-http-client") || message.contains("Host:") || message.contains("User-Agent:")) {
+            return;
+        }
+
+        if (message.startsWith("WELCOME:")) {
             return;
         }
 
@@ -714,6 +733,66 @@ public class ClientGUI {
         }
     }
 
+    private void showProfileDialog() {
+        JPanel panel = new JPanel(new GridLayout(6, 1, 6, 8));
+        panel.setBackground(BG_APP);
+        panel.setPreferredSize(new Dimension(380, 220));
+
+        JLabel idLabel = new JLabel("Your Permanent User ID: " + userId);
+        idLabel.setForeground(COLOR_ONLINE);
+        idLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+
+        JButton copyBtn = new JButton("Copy User ID to Clipboard");
+        copyBtn.setBackground(BG_CARD);
+        copyBtn.setForeground(TEXT_PRIMARY);
+        copyBtn.addActionListener(e -> {
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(userId), null);
+            JOptionPane.showMessageDialog(frame, "User ID copied: " + userId);
+        });
+
+        JLabel nameLabel = new JLabel("Change Nickname:");
+        nameLabel.setForeground(TEXT_PRIMARY);
+        JTextField editField = new JTextField(username);
+        editField.setBackground(BG_CARD);
+        editField.setForeground(TEXT_PRIMARY);
+
+        JButton resetBtn = new JButton("Switch Account / Create New ID");
+        resetBtn.setBackground(new Color(0x3B, 0x15, 0x1B));
+        resetBtn.setForeground(new Color(0xEF, 0x44, 0x44));
+        resetBtn.addActionListener(e -> {
+            Preferences prefs = Preferences.userNodeForPackage(ClientGUI.class);
+            prefs.remove("user_id");
+            prefs.remove("user_name");
+            JOptionPane.showMessageDialog(frame, "Identity reset. Please restart application to create a new profile.");
+            System.exit(0);
+        });
+
+        panel.add(idLabel);
+        panel.add(copyBtn);
+        panel.add(nameLabel);
+        panel.add(editField);
+        panel.add(new JLabel(" "));
+        panel.add(resetBtn);
+
+        int res = JOptionPane.showConfirmDialog(frame, panel, "User Profile & Identity", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (res == JOptionPane.OK_OPTION) {
+            String newName = editField.getText().trim();
+            if (!newName.isEmpty() && !newName.equalsIgnoreCase(username)) {
+                username = newName;
+                Preferences prefs = Preferences.userNodeForPackage(ClientGUI.class);
+                prefs.put("user_name", username);
+
+                frame.setTitle("ChatApp — " + username);
+                userBadge.setText("👤 " + username + " (" + userId + ") [Edit]");
+                if (myNameLabel != null) myNameLabel.setText(username);
+
+                if (wsClient != null && wsClient.isOpen()) {
+                    wsClient.send("IDENTIFY:" + userId + ":" + username);
+                }
+            }
+        }
+    }
+
     private static String escapeHtml(String text) {
         if (text == null) return "";
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>");
@@ -851,6 +930,11 @@ public class ClientGUI {
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
+            Preferences prefs = Preferences.userNodeForPackage(ClientGUI.class);
+            String savedUserId = prefs.get("user_id", null);
+            String savedUsername = prefs.get("user_name", null);
+            String savedServer = prefs.get("server_uri", DEFAULT_PRODUCTION_SERVER);
+
             String initialUser = (args != null && args.length > 0 && !args[0].trim().isEmpty())
                     ? args[0].trim() : null;
             String initialServer = (args != null && args.length > 1 && !args[1].trim().isEmpty())
@@ -858,11 +942,20 @@ public class ClientGUI {
 
             if (initialUser != null) {
                 String server = initialServer != null ? initialServer : DEFAULT_PRODUCTION_SERVER;
-                new ClientGUI(initialUser, server);
+                String uid = savedUserId != null ? savedUserId : "usr_" + Long.toHexString(System.currentTimeMillis());
+                prefs.put("user_id", uid);
+                prefs.put("user_name", initialUser);
+                new ClientGUI(uid, initialUser, server);
                 return;
             }
 
-            // Dark-Themed Connection Dialog
+            // Auto-login with persistent profile if available
+            if (savedUserId != null && savedUsername != null && !savedUsername.isEmpty()) {
+                new ClientGUI(savedUserId, savedUsername, savedServer);
+                return;
+            }
+
+            // First-Time Login Dialog
             JPanel panel = new JPanel(new GridLayout(4, 1, 6, 8));
             panel.setBackground(BG_APP);
             panel.setPreferredSize(new Dimension(360, 160));
@@ -918,7 +1011,12 @@ public class ClientGUI {
                     server = DEFAULT_PRODUCTION_SERVER;
                 }
 
-                new ClientGUI(user, server);
+                String newUid = "usr_" + Long.toHexString(System.currentTimeMillis());
+                prefs.put("user_id", newUid);
+                prefs.put("user_name", user);
+                prefs.put("server_uri", server);
+
+                new ClientGUI(newUid, user, server);
             }
         });
     }
