@@ -96,6 +96,11 @@
   function handleServerMessage(raw) {
     if (!raw) return;
 
+    // Filter out HTTP health checks, bot scans, or probe headers
+    if (raw.includes("HTTP/") || raw.includes("Go-http-client") || raw.includes("Host:") || raw.includes("User-Agent:")) {
+      return;
+    }
+
     // 1. TYPING Notification: "TYPING:username"
     if (raw.startsWith("TYPING:")) {
       const sender = raw.substring(7);
@@ -218,7 +223,10 @@
     activeUsers = usersStr
       .split(",")
       .map(u => u.trim())
-      .filter(u => u.length > 0 && u.toLowerCase() !== username.toLowerCase());
+      .filter(u => u.length > 0 && 
+                   u.toLowerCase() !== username.toLowerCase() && 
+                   !u.includes("HTTP/") && 
+                   !u.includes("Go-http-client"));
 
     renderUsersListUI();
   }

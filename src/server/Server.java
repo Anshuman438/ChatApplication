@@ -61,9 +61,27 @@ public class Server {
     }
 
     /**
+     * Validate that a username is a real nickname and not an HTTP request or scanner.
+     */
+    public static boolean isValidUsername(String name) {
+        if (name == null) return false;
+        name = name.trim();
+        if (name.length() < 1 || name.length() > 25) return false;
+        if (name.contains("HTTP/") || name.startsWith("GET ") || name.startsWith("HEAD ") || name.startsWith("POST ")) {
+            return false;
+        }
+        return name.matches("^[\\p{L}0-9_ -]+$");
+    }
+
+    /**
      * Called when a client successfully identifies with a username.
      */
     public static void handleClientConnected(ChatSession session, String username) {
+        if (!isValidUsername(username)) {
+            session.close();
+            return;
+        }
+
         session.setUsername(username);
         clients.add(session);
 

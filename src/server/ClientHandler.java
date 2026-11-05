@@ -66,8 +66,26 @@ public class ClientHandler extends Thread implements ChatSession {
             if (initialName == null || initialName.trim().isEmpty()) {
                 return;
             }
+            initialName = initialName.trim();
 
-            Server.handleClientConnected(this, initialName.trim());
+            // Detect HTTP probe / health check (e.g. Render / Cloudflare health checks)
+            if (initialName.startsWith("GET ") ||
+                initialName.startsWith("HEAD ") ||
+                initialName.startsWith("POST ") ||
+                initialName.startsWith("OPTIONS ") ||
+                initialName.contains("HTTP/")) {
+                if (output != null) {
+                    output.print("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK");
+                    output.flush();
+                }
+                return;
+            }
+
+            if (!Server.isValidUsername(initialName)) {
+                return;
+            }
+
+            Server.handleClientConnected(this, initialName);
 
             String message;
             while (running && (message = input.readLine()) != null) {

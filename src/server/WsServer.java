@@ -37,8 +37,10 @@ public class WsServer extends WebSocketServer {
 
         if (session.getUsername() == null) {
             String name = message != null ? message.trim() : "";
-            if (!name.isEmpty()) {
+            if (!name.isEmpty() && Server.isValidUsername(name)) {
                 Server.handleClientConnected(session, name);
+            } else {
+                conn.close();
             }
         } else {
             Server.handleIncomingMessage(session, message);
