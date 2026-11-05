@@ -197,21 +197,24 @@
       <main class="conversation-main">
         <!-- Active Chat Header -->
         <div class="conversation-header">
-          <!-- Mobile Back Button to return to Inbox -->
-          <button class="mobile-back-btn mobile-only" id="mobile-back-btn" aria-label="Back to chats">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M15 18l-6-6 6-6"></path>
-            </svg>
-          </button>
+          <div class="conversation-header-left">
+            <!-- Mobile Back Button to return to Inbox -->
+            <button class="mobile-back-btn mobile-only" id="mobile-back-btn" aria-label="Back to chats">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 18l-6-6 6-6"></path>
+              </svg>
+            </button>
 
-          <div class="active-chat-info">
-            <div class="avatar" id="active-chat-avatar">#
-              <span class="online-indicator" id="active-chat-indicator" style="display:none"></span>
-            </div>
-            <div>
-              <div class="active-title" id="current-chat-title">Group Chat</div>
-              <div class="active-subtitle" id="current-chat-subtitle">
-                <span class="active-status-bullet">●</span> Online · Connected
+            <div class="active-chat-info">
+              <div class="avatar" id="active-chat-avatar">
+                <span id="active-chat-avatar-text">#</span>
+                <span class="online-indicator" id="active-chat-indicator" style="display:none"></span>
+              </div>
+              <div class="active-chat-text">
+                <div class="active-title" id="current-chat-title">Group Chat</div>
+                <div class="active-subtitle" id="current-chat-subtitle">
+                  <span class="active-status-bullet">&bull;</span> Online &middot; Connected
+                </div>
               </div>
             </div>
           </div>
@@ -224,7 +227,7 @@
               </svg>
             </button>
             <button class="icon-btn" id="btn-chat-options" title="More options / Profile">
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <circle cx="12" cy="5" r="2"></circle>
                 <circle cx="12" cy="12" r="2"></circle>
                 <circle cx="12" cy="19" r="2"></circle>

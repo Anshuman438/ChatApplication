@@ -61,6 +61,7 @@
   const currentChatTitle = document.getElementById("current-chat-title");
   const currentChatSubtitle = document.getElementById("current-chat-subtitle");
   const activeChatAvatar = document.getElementById("active-chat-avatar");
+  const activeChatAvatarText = document.getElementById("active-chat-avatar-text");
   const activeChatIndicator = document.getElementById("active-chat-indicator");
   const messagesContainer = document.getElementById("messages-container");
   const messageForm = document.getElementById("message-form");
@@ -158,7 +159,7 @@
     const colors = getAvatarColors(name);
 
     if (myUsernameEl) myUsernameEl.textContent = name;
-    if (myUserTagEl) myUserTagEl.textContent = `${tag} · Online`;
+    if (myUserTagEl) myUserTagEl.textContent = `${tag} \u00B7 Online`;
     if (navProfileUsername) navProfileUsername.textContent = name;
 
     if (myAvatarEl) {
@@ -518,26 +519,34 @@
     if (chatKey === "GROUP") {
       groupChannelBtn.classList.add("active");
       currentChatTitle.textContent = "Group Chat";
-      currentChatSubtitle.innerHTML = `<span class="active-status-bullet">●</span> Online · Connected`;
+      currentChatSubtitle.innerHTML = `<span class="active-status-bullet">&bull;</span> Online &middot; Connected`;
       messageInput.placeholder = "Message # Group Chat...";
-      activeChatAvatar.textContent = "#";
+      if (activeChatAvatarText) {
+        activeChatAvatarText.textContent = "#";
+      } else {
+        activeChatAvatar.textContent = "#";
+      }
       activeChatAvatar.style.backgroundColor = "#1A2030";
       activeChatAvatar.style.color = "#A3B1FF";
       activeChatAvatar.style.borderRadius = "12px";
-      activeChatIndicator.style.display = "none";
+      if (activeChatIndicator) activeChatIndicator.style.display = "none";
       updateGroupBadge();
       setActiveNavTab(navRoomsTab);
     } else {
       groupChannelBtn.classList.remove("active");
       currentChatTitle.textContent = chatKey;
-      currentChatSubtitle.innerHTML = `<span class="active-status-bullet">●</span> Online · Connected`;
+      currentChatSubtitle.innerHTML = `<span class="active-status-bullet">&bull;</span> Online &middot; Connected`;
       messageInput.placeholder = `Message ${chatKey}...`;
       const colors = getAvatarColors(chatKey);
-      activeChatAvatar.textContent = chatKey.charAt(0).toUpperCase();
+      if (activeChatAvatarText) {
+        activeChatAvatarText.textContent = chatKey.charAt(0).toUpperCase();
+      } else {
+        activeChatAvatar.textContent = chatKey.charAt(0).toUpperCase();
+      }
       activeChatAvatar.style.backgroundColor = colors.bg;
       activeChatAvatar.style.color = colors.text;
       activeChatAvatar.style.borderRadius = "50%";
-      activeChatIndicator.style.display = "block";
+      if (activeChatIndicator) activeChatIndicator.style.display = "block";
       setActiveNavTab(navChatsTab);
     }
 
