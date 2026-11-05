@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Chat | itsanshuman.dev</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Login Modal Overlay -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="logo-circle">💬</div>
+        <h2>Join Real-Time Chat</h2>
+        <p>Built with Java & WebSockets by <a href="https://itsanshuman.dev" target="_blank">Anshuman</a></p>
+      </div>
+
+      <form id="login-form">
+        <div class="input-group">
+          <label for="username-input">Enter your nickname</label>
+          <input type="text" id="username-input" placeholder="e.g. Alex" required autocomplete="off" autofocus maxlength="25">
+        </div>
+        <button type="submit" class="btn-primary">Connect to Chat</button>
+      </form>
+
+      <div class="modal-footer">
+        <span>Prefer a native app?</span>
+        <a href="/download/ChatApp-Desktop.jar" class="download-link" download>⬇️ Download Desktop Client (.jar)</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main App Layout -->
+  <div class="app-container">
+    
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <span class="app-logo">💬</span>
+        <span class="app-name">ChatApp</span>
+        <span class="badge" id="connection-status">Connecting...</span>
+      </div>
+      
+      <div class="header-right">
+        <a href="/download/ChatApp-Desktop.jar" class="btn-download" download title="Download runnable Java desktop application">
+          <span>💻</span> Download Desktop (.jar)
+        </a>
+        <a href="https://itsanshuman.dev" target="_blank" class="btn-portfolio">Portfolio ↗</a>
+      </div>
+    </header>
+
+    <!-- Chat Body -->
+    <div class="app-body">
+      
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <!-- User Profile Card -->
+        <div class="user-profile">
+          <div class="avatar" id="my-avatar">?</div>
+          <div class="user-info">
+            <span class="username" id="my-username">Guest</span>
+            <span class="user-status">Online</span>
+          </div>
+        </div>
+
+        <!-- Channels / Conversations -->
+        <div class="channels-section">
+          <div class="section-title">Rooms</div>
+          <div class="channel-item active" data-chat="GROUP" id="group-channel-btn">
+            <span class="channel-icon">#</span>
+            <span class="channel-name">Group Chat</span>
+            <span class="unread-badge" id="unread-group" style="display:none">0</span>
+          </div>
+
+          <div class="section-title">Direct Messages</div>
+          <div class="users-list" id="online-users-list">
+            <div class="empty-users">No other users online yet</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Chat Area -->
+      <main class="chat-main">
+        
+        <!-- Chat Header -->
+        <div class="chat-header">
+          <div class="chat-header-info">
+            <h3 id="current-chat-title"># Group Chat</h3>
+            <span class="chat-subtitle" id="current-chat-subtitle">Public broadcast room for all connected web & desktop users</span>
+          </div>
+        </div>
+
+        <!-- Messages Feed -->
+        <div class="messages-container" id="messages-container">
+          <!-- Messages will be injected here -->
+        </div>
+
+        <!-- Typing Indicator -->
+        <div class="typing-bar" id="typing-indicator"></div>
+
+        <!-- Input Box -->
+        <form id="message-form" class="message-input-bar">
+          <input type="text" id="message-input" placeholder="Message # Group Chat..." autocomplete="off">
+          <button type="submit" id="send-btn" class="send-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </form>
+
+      </main>
+
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+[Unit]
+Description=Java Real-Time Chat Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/chat_application
+ExecStart=/usr/bin/java -jar /opt/chat_application/target/chat-server.jar
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
