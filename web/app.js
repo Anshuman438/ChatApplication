@@ -10,6 +10,28 @@
   const unreadCounts = {};
   let typingTimer = null;
   let isTyping = false;
+  let activeUsers = [];
+
+  // Deterministic avatar color palette matching redesign
+  const AVATAR_PALETTE = [
+    { bg: "#E8B04F", text: "#241803" }, // Amber
+    { bg: "#3FB68B", text: "#04170F" }, // Emerald
+    { bg: "#4F5BD5", text: "#FFFFFF" }, // Indigo
+    { bg: "#8B5CF6", text: "#FFFFFF" }, // Violet
+    { bg: "#EC4899", text: "#FFFFFF" }, // Pink
+    { bg: "#3B82F6", text: "#FFFFFF" }, // Blue
+    { bg: "#F97316", text: "#FFFFFF" }, // Orange
+    { bg: "#14B8A6", text: "#04170F" }  // Teal
+  ];
+
+  function getAvatarColors(name) {
+    if (!name || name === "GROUP") return { bg: "#4F5BD5", text: "#FFFFFF" };
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+  }
 
   // DOM Elements
   const loginModal = document.getElementById("login-modal");
@@ -20,12 +42,19 @@
   const myAvatarEl = document.getElementById("my-avatar");
   const groupChannelBtn = document.getElementById("group-channel-btn");
   const onlineUsersList = document.getElementById("online-users-list");
+  const userSearch = document.getElementById("user-search");
   const currentChatTitle = document.getElementById("current-chat-title");
   const currentChatSubtitle = document.getElementById("current-chat-subtitle");
+  const activeChatAvatar = document.getElementById("active-chat-avatar");
+  const activeChatIndicator = document.getElementById("active-chat-indicator");
   const messagesContainer = document.getElementById("messages-container");
   const messageForm = document.getElementById("message-form");
   const messageInput = document.getElementById("message-input");
-  const typingIndicator = document.getElementById("typing-indicator");
+  const typingRow = document.getElementById("typing-indicator-row");
+  const typingAvatar = document.getElementById("typing-avatar");
+  const btnEmoji = document.getElementById("btn-emoji");
+  const emojiPopover = document.getElementById("emoji-popover");
+  const btnSettings = document.getElementById("btn-settings");
 
   // Determine WebSocket Endpoint
   function getWebSocketUrl() {
@@ -46,7 +75,10 @@
 
     username = name;
     myUsernameEl.textContent = username;
+    const colors = getAvatarColors(username);
     myAvatarEl.textContent = username.charAt(0).toUpperCase();
+    myAvatarEl.style.backgroundColor = colors.bg;
+    myAvatarEl.style.color = colors.text;
 
     loginModal.classList.add("hidden");
     connectWebSocket();
@@ -71,7 +103,7 @@
       };
 
       ws.onclose = function () {
-        updateStatus("Disconnected (reconnecting...)", "disconnected");
+        updateStatus("Disconnected", "disconnected");
         // Auto-reconnect after 3 seconds
         setTimeout(() => {
           if (username) connectWebSocket();
@@ -79,17 +111,17 @@
       };
 
       ws.onerror = function () {
-        updateStatus("Error", "disconnected");
+        updateStatus("Disconnected", "disconnected");
       };
     } catch (err) {
       console.error("WebSocket init error:", err);
-      updateStatus("Connection failed", "disconnected");
+      updateStatus("Disconnected", "disconnected");
     }
   }
 
   function updateStatus(text, stateClass) {
-    connectionStatus.textContent = text;
-    connectionStatus.className = "badge " + stateClass;
+    connectionStatus.className = `status-pill ${stateClass}`;
+    connectionStatus.innerHTML = `<span class="status-dot"></span>${text}`;
   }
 
   // Handle Incoming Messages from Server
@@ -103,9 +135,11 @@
 
     // 1. TYPING Notification: "TYPING:username"
     if (raw.startsWith("TYPING:")) {
-      const sender = raw.substring(7);
-      if (currentChat === sender || (currentChat === "GROUP" && sender !== username)) {
-        showTyping(sender);
+      const sender = raw.substring(7).trim();
+      if (sender.toLowerCase() !== username.toLowerCase()) {
+        if (currentChat === sender || (currentChat === "GROUP")) {
+          showTyping(sender);
+        }
       }
       return;
     }
@@ -187,38 +221,72 @@
 
   function renderMessages() {
     messagesContainer.innerHTML = "";
+    
+    // Day badge
+    const dateBadge = document.createElement("div");
+    dateBadge.className = "date-badge";
+    dateBadge.textContent = "Today";
+    messagesContainer.appendChild(dateBadge);
+
+    const innerWrap = document.createElement("div");
+    innerWrap.className = "messages-inner-wrap";
+
     const list = chatHistory[currentChat] || [];
 
     list.forEach(msg => {
-      const row = document.createElement("div");
-      row.className = `message-row ${msg.type}`;
-
       if (msg.type === "system") {
-        row.innerHTML = `<div class="msg-bubble">${escapeHtml(msg.text)} <span class="msg-time">${msg.time}</span></div>`;
-      } else {
-        const senderName = msg.type === "me" ? "Me" : msg.sender;
-        row.innerHTML = `
-          <div class="msg-sender">${escapeHtml(senderName)} <span class="msg-time">${msg.time}</span></div>
-          <div class="msg-bubble">${escapeHtml(msg.text)}</div>
+        const sysDiv = document.createElement("div");
+        sysDiv.className = "msg-system";
+        sysDiv.textContent = msg.text;
+        innerWrap.appendChild(sysDiv);
+      } else if (msg.type === "me") {
+        const meWrap = document.createElement("div");
+        meWrap.className = "msg-bubble-wrap me";
+        meWrap.innerHTML = `
+          <div class="msg-bubble me">${escapeHtml(msg.text)}</div>
+          <div class="msg-meta me">
+            <span>${msg.time}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ADE9C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Delivered"><path d="M2 12l5 5L18 6M12 16l1 1L22 6"></path></svg>
+          </div>
         `;
+        innerWrap.appendChild(meWrap);
+      } else {
+        const colors = getAvatarColors(msg.sender);
+        const otherWrap = document.createElement("div");
+        otherWrap.className = "msg-bubble-wrap other";
+        otherWrap.innerHTML = `
+          <div class="avatar-sm" style="background:${colors.bg}; color:${colors.text};">${msg.sender.charAt(0).toUpperCase()}</div>
+          <div class="msg-content">
+            ${currentChat === "GROUP" ? `<div class="msg-sender-name">${escapeHtml(msg.sender)}</div>` : ""}
+            <div class="msg-bubble other">${escapeHtml(msg.text)}</div>
+            <div class="msg-meta other">
+              <span>${msg.time}</span>
+            </div>
+          </div>
+        `;
+        innerWrap.appendChild(otherWrap);
       }
-
-      messagesContainer.appendChild(row);
     });
 
+    messagesContainer.appendChild(innerWrap);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
 
   function showTyping(user) {
-    typingIndicator.textContent = `${user} is typing...`;
+    if (!typingRow) return;
+    const colors = getAvatarColors(user);
+    typingAvatar.textContent = user.charAt(0).toUpperCase();
+    typingAvatar.style.backgroundColor = colors.bg;
+    typingAvatar.style.color = colors.text;
+
+    typingRow.style.display = "flex";
     clearTimeout(typingTimer);
     typingTimer = setTimeout(() => {
-      typingIndicator.textContent = "";
+      typingRow.style.display = "none";
     }, 2000);
   }
 
   // Handle User List Updates
-  let activeUsers = [];
   function updateUsersList(usersStr) {
     activeUsers = usersStr
       .split(",")
@@ -234,25 +302,52 @@
   function renderUsersListUI() {
     onlineUsersList.innerHTML = "";
 
-    if (activeUsers.length === 0) {
-      onlineUsersList.innerHTML = `<div class="empty-users">No other users online yet</div>`;
+    const query = (userSearch ? userSearch.value : "").trim().toLowerCase();
+    const filtered = query 
+      ? activeUsers.filter(u => u.toLowerCase().includes(query)) 
+      : activeUsers;
+
+    if (filtered.length === 0) {
+      onlineUsersList.innerHTML = `<div class="empty-notice">${query ? "No users matching search" : "No other users online yet"}</div>`;
       return;
     }
 
-    activeUsers.forEach(user => {
-      const item = document.createElement("div");
-      item.className = `channel-item ${currentChat === user ? "active" : ""}`;
+    filtered.forEach(user => {
+      const colors = getAvatarColors(user);
+      const row = document.createElement("div");
+      row.className = `user-row ${currentChat === user ? "active" : ""}`;
       const unread = unreadCounts[user] || 0;
 
-      item.innerHTML = `
-        <span class="channel-icon">🟢</span>
-        <span class="channel-name">${escapeHtml(user)}</span>
-        ${unread > 0 ? `<span class="unread-badge">${unread}</span>` : ""}
+      // Last message preview if any
+      const history = chatHistory[user] || [];
+      const lastMsg = history.length > 0 ? history[history.length - 1] : null;
+      const previewText = lastMsg 
+        ? (lastMsg.type === "me" ? "You: " : "") + lastMsg.text 
+        : "Online";
+      const previewTime = lastMsg ? lastMsg.time : "";
+
+      row.innerHTML = `
+        <div class="avatar" style="background:${colors.bg}; color:${colors.text};">
+          ${user.charAt(0).toUpperCase()}
+          <span class="online-indicator"></span>
+        </div>
+        <div class="user-meta-col">
+          <div class="user-name-line">
+            <span class="user-name">${escapeHtml(user)}</span>
+            <span class="user-time">${previewTime}</span>
+          </div>
+          <div class="user-snippet">${escapeHtml(previewText)}</div>
+        </div>
+        ${unread > 0 ? `<span class="unread-bubble">${unread}</span>` : ""}
       `;
 
-      item.addEventListener("click", () => switchChat(user));
-      onlineUsersList.appendChild(item);
+      row.addEventListener("click", () => switchChat(user));
+      onlineUsersList.appendChild(row);
     });
+  }
+
+  if (userSearch) {
+    userSearch.addEventListener("input", renderUsersListUI);
   }
 
   function updateGroupBadge() {
@@ -260,7 +355,7 @@
     const count = unreadCounts["GROUP"] || 0;
     if (count > 0) {
       badge.textContent = count;
-      badge.style.display = "inline-block";
+      badge.style.display = "flex";
     } else {
       badge.style.display = "none";
     }
@@ -271,17 +366,29 @@
     currentChat = chatKey;
     unreadCounts[chatKey] = 0;
 
+    // Update active class in sidebar
     if (chatKey === "GROUP") {
       groupChannelBtn.classList.add("active");
-      currentChatTitle.textContent = "# Group Chat";
+      currentChatTitle.textContent = "Group Chat";
       currentChatSubtitle.textContent = "Public broadcast room for all connected web & desktop users";
       messageInput.placeholder = "Message # Group Chat...";
+      activeChatAvatar.textContent = "#";
+      activeChatAvatar.style.backgroundColor = "#1A2030";
+      activeChatAvatar.style.color = "#A3B1FF";
+      activeChatAvatar.style.borderRadius = "12px";
+      activeChatIndicator.style.display = "none";
       updateGroupBadge();
     } else {
       groupChannelBtn.classList.remove("active");
-      currentChatTitle.textContent = `💬 Direct Message with ${chatKey}`;
-      currentChatSubtitle.textContent = `Private end-to-end conversation with ${chatKey}`;
+      currentChatTitle.textContent = chatKey;
+      currentChatSubtitle.textContent = "Online · Private conversation";
       messageInput.placeholder = `Message ${chatKey}...`;
+      const colors = getAvatarColors(chatKey);
+      activeChatAvatar.textContent = chatKey.charAt(0).toUpperCase();
+      activeChatAvatar.style.backgroundColor = colors.bg;
+      activeChatAvatar.style.color = colors.text;
+      activeChatAvatar.style.borderRadius = "50%";
+      activeChatIndicator.style.display = "block";
     }
 
     renderUsersListUI();
@@ -300,40 +407,79 @@
     const time = formatTime(new Date());
 
     if (currentChat === "GROUP") {
+      // Normal broadcast
       ws.send(text);
     } else {
+      // Private message protocol: "PRIVATE:recipient:message"
       ws.send(`PRIVATE:${currentChat}:${text}`);
+
       saveMessage(currentChat, {
-        sender: username,
+        sender: "Me",
         text: text,
         time: time,
         type: "me"
       });
       renderMessages();
+      renderUsersListUI();
     }
 
     messageInput.value = "";
-    isTyping = false;
+    messageInput.focus();
   });
 
-  // Typing Trigger
+  // Typing Notification
   messageInput.addEventListener("input", function () {
     if (!isTyping && ws && ws.readyState === WebSocket.OPEN) {
       ws.send("TYPING");
       isTyping = true;
-      setTimeout(() => {
-        isTyping = false;
-      }, 2000);
     }
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => {
+      isTyping = false;
+    }, 1500);
   });
 
+  // Emoji Popover
+  if (btnEmoji && emojiPopover) {
+    btnEmoji.addEventListener("click", function (e) {
+      e.stopPropagation();
+      const isVisible = emojiPopover.style.display === "grid";
+      emojiPopover.style.display = isVisible ? "none" : "grid";
+    });
+
+    emojiPopover.querySelectorAll(".emoji-opt").forEach(opt => {
+      opt.addEventListener("click", function () {
+        messageInput.value += this.textContent;
+        emojiPopover.style.display = "none";
+        messageInput.focus();
+      });
+    });
+
+    document.addEventListener("click", function (e) {
+      if (!emojiPopover.contains(e.target) && e.target !== btnEmoji) {
+        emojiPopover.style.display = "none";
+      }
+    });
+  }
+
+  // Settings / Reconnect modal
+  if (btnSettings) {
+    btnSettings.addEventListener("click", function () {
+      if (confirm(`Currently signed in as "${username}". Would you like to change your nickname?`)) {
+        if (ws) ws.close();
+        loginModal.classList.remove("hidden");
+        usernameInput.focus();
+      }
+    });
+  }
+
+  // Utilities
   function formatTime(date) {
-    const h = String(date.getHours()).padStart(2, "0");
-    const m = String(date.getMinutes()).padStart(2, "0");
-    return `${h}:${m}`;
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
   }
 
   function escapeHtml(str) {
+    if (!str) return "";
     return str
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -341,4 +487,5 @@
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
   }
+
 })();

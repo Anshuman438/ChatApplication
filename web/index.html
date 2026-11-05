@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Real-Time Chat | itsanshuman.dev</title>
+  <title>ChatApp | itsanshuman.dev</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,105 +14,190 @@
   <!-- Login Modal Overlay -->
   <div id="login-modal" class="modal-overlay">
     <div class="modal-card">
-      <div class="modal-header">
-        <div class="logo-circle">💬</div>
-        <h2>Join Real-Time Chat</h2>
-        <p>Built with Java & WebSockets by <a href="https://itsanshuman.dev" target="_blank">Anshuman</a></p>
+      <div class="logo-circle">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path>
+        </svg>
       </div>
+      <h2>Welcome to ChatApp</h2>
+      <p>Built with Java & WebSockets by <a href="https://itsanshuman.dev" target="_blank">Anshuman</a></p>
 
       <form id="login-form">
         <div class="input-group">
-          <label for="username-input">Enter your nickname</label>
-          <input type="text" id="username-input" placeholder="e.g. Alex" required autocomplete="off" autofocus maxlength="25">
+          <label for="username-input">Choose your nickname</label>
+          <input type="text" id="username-input" placeholder="e.g. Alex" required autocomplete="off" autofocus maxlength="20">
         </div>
-        <button type="submit" class="btn-primary">Connect to Chat</button>
+        <button type="submit" class="btn-primary">Join Chat</button>
       </form>
 
       <div class="modal-footer">
-        <span>Prefer a native app?</span>
+        <span>Prefer the native desktop application?</span>
         <a href="/download/ChatApp-Desktop.jar" class="download-link" download>⬇️ Download Desktop Client (.jar)</a>
       </div>
     </div>
   </div>
 
-  <!-- Main App Layout -->
+  <!-- App Wrapper -->
   <div class="app-container">
     
-    <!-- Top Navigation Header -->
-    <header class="app-header">
-      <div class="header-left">
-        <span class="app-logo">💬</span>
-        <span class="app-name">ChatApp</span>
-        <span class="badge" id="connection-status">Connecting...</span>
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <div class="app-icon-badge">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path>
+          </svg>
+        </div>
+        <span class="app-title">ChatApp</span>
+        <span class="status-pill connected" id="connection-status">
+          <span class="status-dot"></span>Connected
+        </span>
       </div>
-      
-      <div class="header-right">
-        <a href="/download/ChatApp-Desktop.jar" class="btn-download" download title="Download runnable Java desktop application">
-          <span>💻</span> Download Desktop (.jar)
+
+      <div class="top-bar-right">
+        <a href="/download/ChatApp-Desktop.jar" class="btn-download" download>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 20h16"></path>
+          </svg>
+          Download Desktop (.jar)
         </a>
-        <a href="https://itsanshuman.dev" target="_blank" class="btn-portfolio">Portfolio ↗</a>
+        <a href="https://itsanshuman.dev" target="_blank" class="portfolio-link">
+          Portfolio
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 17L17 7M8 7h9v9"></path>
+          </svg>
+        </a>
       </div>
     </header>
 
-    <!-- Chat Body -->
-    <div class="app-body">
+    <!-- Main Workspace -->
+    <div class="app-workspace">
       
       <!-- Sidebar -->
       <aside class="sidebar">
-        <!-- User Profile Card -->
-        <div class="user-profile">
-          <div class="avatar" id="my-avatar">?</div>
-          <div class="user-info">
-            <span class="username" id="my-username">Guest</span>
-            <span class="user-status">Online</span>
+        <!-- Search Box -->
+        <div class="search-wrapper">
+          <label class="search-field">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="M20 20l-3.5-3.5"></path>
+            </svg>
+            <input id="user-search" placeholder="Search conversations" autocomplete="off">
+          </label>
+        </div>
+
+        <!-- Scrollable Channels & Users List -->
+        <div class="sidebar-list">
+          <div class="list-section-header">ROOMS</div>
+          <div class="channel-row active" id="group-channel-btn">
+            <div class="channel-hash">#</div>
+            <div class="channel-name">Group Chat</div>
+            <span class="unread-bubble" id="unread-group" style="display:none">0</span>
+          </div>
+
+          <div class="list-section-header">DIRECT MESSAGES</div>
+          <div id="online-users-list" class="users-stack">
+            <div class="empty-notice">No other users online yet</div>
           </div>
         </div>
 
-        <!-- Channels / Conversations -->
-        <div class="channels-section">
-          <div class="section-title">Rooms</div>
-          <div class="channel-item active" data-chat="GROUP" id="group-channel-btn">
-            <span class="channel-icon">#</span>
-            <span class="channel-name">Group Chat</span>
-            <span class="unread-badge" id="unread-group" style="display:none">0</span>
+        <!-- Current User Profile Footer -->
+        <div class="current-user-card">
+          <div class="avatar my-avatar" id="my-avatar">?
+            <span class="online-indicator"></span>
           </div>
-
-          <div class="section-title">Direct Messages</div>
-          <div class="users-list" id="online-users-list">
-            <div class="empty-users">No other users online yet</div>
+          <div class="user-meta">
+            <div class="user-name" id="my-username">Guest</div>
+            <div class="user-status-text">Online</div>
           </div>
+          <button class="icon-btn" id="btn-settings" title="Settings / Change Nickname">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path>
+            </svg>
+          </button>
         </div>
       </aside>
 
-      <!-- Main Chat Area -->
-      <main class="chat-main">
-        
-        <!-- Chat Header -->
-        <div class="chat-header">
-          <div class="chat-header-info">
-            <h3 id="current-chat-title"># Group Chat</h3>
-            <span class="chat-subtitle" id="current-chat-subtitle">Public broadcast room for all connected web & desktop users</span>
+      <!-- Main Conversation Column -->
+      <main class="conversation-main">
+        <!-- Header -->
+        <div class="conversation-header">
+          <div class="active-chat-info">
+            <div class="avatar" id="active-chat-avatar">#
+              <span class="online-indicator" id="active-chat-indicator" style="display:none"></span>
+            </div>
+            <div>
+              <div class="active-title" id="current-chat-title">Group Chat</div>
+              <div class="active-subtitle" id="current-chat-subtitle">Public broadcast room for all connected web & desktop users</div>
+            </div>
+          </div>
+          <div class="header-action-btns">
+            <button class="icon-btn" title="Search messages">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="M20 20l-3.5-3.5"></path>
+              </svg>
+            </button>
+            <button class="icon-btn" title="More options">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="5" cy="12" r="1.8"></circle>
+                <circle cx="12" cy="12" r="1.8"></circle>
+                <circle cx="19" cy="12" r="1.8"></circle>
+              </svg>
+            </button>
           </div>
         </div>
 
         <!-- Messages Feed -->
-        <div class="messages-container" id="messages-container">
-          <!-- Messages will be injected here -->
+        <div class="messages-scroll-area" id="messages-container">
+          <div class="date-badge">Today</div>
+          <!-- Injected message rows -->
         </div>
 
-        <!-- Typing Indicator -->
-        <div class="typing-bar" id="typing-indicator"></div>
+        <!-- Typing Bubble Bar -->
+        <div class="typing-container" id="typing-indicator-row" style="display: none;">
+          <div class="avatar" id="typing-avatar">?</div>
+          <div class="typing-bubble">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
 
-        <!-- Input Box -->
-        <form id="message-form" class="message-input-bar">
-          <input type="text" id="message-input" placeholder="Message # Group Chat..." autocomplete="off">
-          <button type="submit" id="send-btn" class="send-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
-          </button>
-        </form>
+        <!-- Floating Composer Input Bar -->
+        <div class="composer-container">
+          <form id="message-form" class="composer-bar">
+            <button type="button" class="composer-btn" id="btn-attach" title="Attach file">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 11l-8.6 8.6a5 5 0 0 1-7-7L14 4a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4L15 7"></path>
+              </svg>
+            </button>
+            
+            <input type="text" id="message-input" placeholder="Message # Group Chat..." autocomplete="off">
+            
+            <button type="button" class="composer-btn" id="btn-emoji" title="Add emoji">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01"></path>
+              </svg>
+            </button>
+
+            <button type="submit" class="composer-send-btn" title="Send message">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path>
+              </svg>
+            </button>
+          </form>
+
+          <!-- Emoji Popover -->
+          <div id="emoji-popover" class="emoji-popover" style="display:none;">
+            <span class="emoji-opt">😀</span><span class="emoji-opt">😂</span><span class="emoji-opt">😍</span>
+            <span class="emoji-opt">🔥</span><span class="emoji-opt">👍</span><span class="emoji-opt">🎉</span>
+            <span class="emoji-opt">❤️</span><span class="emoji-opt">🚀</span><span class="emoji-opt">💯</span>
+            <span class="emoji-opt">👀</span><span class="emoji-opt">✨</span><span class="emoji-opt">🙏</span>
+          </div>
+        </div>
 
       </main>
 
