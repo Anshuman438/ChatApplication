@@ -1,4 +1,4 @@
-// Real-Time Chat Web Client
+// Real-Time Chat Web Client (Mobile & Desktop Responsive)
 (function () {
   let ws = null;
   let username = "";
@@ -34,6 +34,7 @@
   }
 
   // DOM Elements
+  const appWorkspace = document.getElementById("app-workspace");
   const loginModal = document.getElementById("login-modal");
   const loginForm = document.getElementById("login-form");
   const usernameInput = document.getElementById("username-input");
@@ -41,6 +42,7 @@
   const myUsernameEl = document.getElementById("my-username");
   const myAvatarEl = document.getElementById("my-avatar");
   const groupChannelBtn = document.getElementById("group-channel-btn");
+  const groupLastSnippet = document.getElementById("group-last-snippet");
   const onlineUsersList = document.getElementById("online-users-list");
   const userSearch = document.getElementById("user-search");
   const currentChatTitle = document.getElementById("current-chat-title");
@@ -55,6 +57,14 @@
   const btnEmoji = document.getElementById("btn-emoji");
   const emojiPopover = document.getElementById("emoji-popover");
   const btnSettings = document.getElementById("btn-settings");
+
+  // Mobile Navigation Elements
+  const mobileBackBtn = document.getElementById("mobile-back-btn");
+  const navRoomsTab = document.getElementById("nav-rooms-tab");
+  const navChatsTab = document.getElementById("nav-chats-tab");
+  const navProfileTab = document.getElementById("nav-profile-tab");
+  const navProfileUsername = document.getElementById("nav-profile-username");
+  const navUnreadRooms = document.getElementById("nav-unread-rooms");
 
   // Determine WebSocket Endpoint
   function getWebSocketUrl() {
@@ -75,6 +85,8 @@
 
     username = name;
     myUsernameEl.textContent = username;
+    if (navProfileUsername) navProfileUsername.textContent = username;
+
     const colors = getAvatarColors(username);
     myAvatarEl.textContent = username.charAt(0).toUpperCase();
     myAvatarEl.style.backgroundColor = colors.bg;
@@ -120,8 +132,10 @@
   }
 
   function updateStatus(text, stateClass) {
-    connectionStatus.className = `status-pill ${stateClass}`;
-    connectionStatus.innerHTML = `<span class="status-dot"></span>${text}`;
+    if (connectionStatus) {
+      connectionStatus.className = `status-pill ${stateClass}`;
+      connectionStatus.innerHTML = `<span class="status-dot"></span>${text}`;
+    }
   }
 
   // Handle Incoming Messages from Server
@@ -155,8 +169,8 @@
     if (raw.startsWith("PRIVATE:")) {
       const parts = raw.split(":");
       if (parts.length >= 3) {
-        const sender = parts[1];
-        const text = parts.slice(2).join(":");
+        const sender = parts[1].trim();
+        const text = parts.slice(2).join(":").trim();
         const time = formatTime(new Date());
 
         saveMessage(sender, {
@@ -168,10 +182,10 @@
 
         if (currentChat !== sender) {
           unreadCounts[sender] = (unreadCounts[sender] || 0) + 1;
-          renderUsersListUI();
         } else {
           renderMessages();
         }
+        renderUsersListUI();
       }
       return;
     }
@@ -209,6 +223,11 @@
       } else {
         renderMessages();
       }
+
+      if (groupLastSnippet) {
+        const unread = unreadCounts["GROUP"] || 0;
+        groupLastSnippet.textContent = unread > 0 ? `${unread} new message${unread > 1 ? "s" : ""}` : `${sender}: ${text}`;
+      }
     }
   }
 
@@ -222,7 +241,7 @@
   function renderMessages() {
     messagesContainer.innerHTML = "";
     
-    // Day badge
+    // Centered Day badge
     const dateBadge = document.createElement("div");
     dateBadge.className = "date-badge";
     dateBadge.textContent = "Today";
@@ -356,8 +375,15 @@
     if (count > 0) {
       badge.textContent = count;
       badge.style.display = "flex";
+      if (navUnreadRooms) {
+        navUnreadRooms.textContent = count;
+        navUnreadRooms.style.display = "flex";
+      }
     } else {
       badge.style.display = "none";
+      if (navUnreadRooms) {
+        navUnreadRooms.style.display = "none";
+      }
     }
   }
 
@@ -366,11 +392,16 @@
     currentChat = chatKey;
     unreadCounts[chatKey] = 0;
 
-    // Update active class in sidebar
+    // On mobile, switch to conversation view
+    if (window.innerWidth <= 768 && appWorkspace) {
+      appWorkspace.classList.remove("view-inbox");
+      appWorkspace.classList.add("view-chat");
+    }
+
     if (chatKey === "GROUP") {
       groupChannelBtn.classList.add("active");
       currentChatTitle.textContent = "Group Chat";
-      currentChatSubtitle.textContent = "Public broadcast room for all connected web & desktop users";
+      currentChatSubtitle.innerHTML = `<span class="active-status-bullet">●</span> Online · Connected`;
       messageInput.placeholder = "Message # Group Chat...";
       activeChatAvatar.textContent = "#";
       activeChatAvatar.style.backgroundColor = "#1A2030";
@@ -378,10 +409,11 @@
       activeChatAvatar.style.borderRadius = "12px";
       activeChatIndicator.style.display = "none";
       updateGroupBadge();
+      setActiveNavTab(navRoomsTab);
     } else {
       groupChannelBtn.classList.remove("active");
       currentChatTitle.textContent = chatKey;
-      currentChatSubtitle.textContent = "Online · Private conversation";
+      currentChatSubtitle.innerHTML = `<span class="active-status-bullet">●</span> Online · Connected`;
       messageInput.placeholder = `Message ${chatKey}...`;
       const colors = getAvatarColors(chatKey);
       activeChatAvatar.textContent = chatKey.charAt(0).toUpperCase();
@@ -389,6 +421,7 @@
       activeChatAvatar.style.color = colors.text;
       activeChatAvatar.style.borderRadius = "50%";
       activeChatIndicator.style.display = "block";
+      setActiveNavTab(navChatsTab);
     }
 
     renderUsersListUI();
@@ -397,6 +430,53 @@
   }
 
   groupChannelBtn.addEventListener("click", () => switchChat("GROUP"));
+
+  // Mobile Back Button: Returns to Inbox View
+  if (mobileBackBtn) {
+    mobileBackBtn.addEventListener("click", function () {
+      if (appWorkspace) {
+        appWorkspace.classList.remove("view-chat");
+        appWorkspace.classList.add("view-inbox");
+      }
+      setActiveNavTab(navChatsTab);
+    });
+  }
+
+  // Bottom Navigation Tabs
+  function setActiveNavTab(activeTab) {
+    [navRoomsTab, navChatsTab, navProfileTab].forEach(tab => {
+      if (tab) tab.classList.remove("active");
+    });
+    if (activeTab) activeTab.classList.add("active");
+  }
+
+  if (navRoomsTab) {
+    navRoomsTab.addEventListener("click", function () {
+      switchChat("GROUP");
+      setActiveNavTab(navRoomsTab);
+    });
+  }
+
+  if (navChatsTab) {
+    navChatsTab.addEventListener("click", function () {
+      if (appWorkspace) {
+        appWorkspace.classList.remove("view-chat");
+        appWorkspace.classList.add("view-inbox");
+      }
+      setActiveNavTab(navChatsTab);
+    });
+  }
+
+  if (navProfileTab) {
+    navProfileTab.addEventListener("click", function () {
+      setActiveNavTab(navProfileTab);
+      if (confirm(`Signed in as "${username}". Would you like to change your nickname?`)) {
+        if (ws) ws.close();
+        loginModal.classList.remove("hidden");
+        usernameInput.focus();
+      }
+    });
+  }
 
   // Send Message
   messageForm.addEventListener("submit", function (e) {
@@ -462,7 +542,7 @@
     });
   }
 
-  // Settings / Reconnect modal
+  // Settings / Reconnect button (Desktop footer)
   if (btnSettings) {
     btnSettings.addEventListener("click", function () {
       if (confirm(`Currently signed in as "${username}". Would you like to change your nickname?`)) {
