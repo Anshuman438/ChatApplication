@@ -378,6 +378,97 @@ input::placeholder {
   border-color: #ef4444;
 }
 
+/* Create Group Modal Specifics */
+.modal-group-card {
+  max-width: 440px;
+}
+
+.input-with-hash {
+  display: flex;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  padding: 0 14px;
+  height: 46px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input-with-hash:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79, 91, 213, 0.25);
+}
+
+.input-hash-prefix {
+  font-size: 17px;
+  font-weight: 700;
+  color: #A3B1FF;
+  margin-right: 8px;
+  user-select: none;
+}
+
+.input-with-hash input {
+  flex: 1;
+  background: none;
+  color: var(--text-primary);
+  font-size: 14.5px;
+  font-weight: 500;
+}
+
+.field-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  display: block;
+}
+
+.group-preview-box {
+  background: #11141B;
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-top: 14px;
+  margin-bottom: 20px;
+}
+
+.preview-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.preview-row {
+  margin-bottom: 0;
+  background: rgba(255, 255, 255, 0.03);
+  pointer-events: none;
+}
+
+.modal-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn-secondary {
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-btn);
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+  background: #232a3b;
+  color: #fff;
+}
+
 /* ============================================================
    App Layout
    ============================================================ */
@@ -572,6 +663,40 @@ input::placeholder {
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--text-muted);
+}
+
+.list-section-header.section-header-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-create-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(79, 91, 213, 0.15);
+  border: 1px solid rgba(79, 91, 213, 0.35);
+  color: #A3B1FF;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-create-group:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #FFFFFF;
+}
+
+.rooms-stack {
+  display: flex;
+  flex-direction: column;
 }
 
 .channel-row {

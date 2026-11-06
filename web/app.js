@@ -1,10 +1,11 @@
-// Real-Time Chat Web Client (Persistent User Profile & Reconnection)
+// Real-Time Chat Web Client (Persistent User Profile, Reconnection & Multi-Group Support)
 (function () {
   let ws = null;
-  let currentChat = "GROUP"; // "GROUP" or username for direct message
+  let currentChat = "Group Chat"; // Active room name or username for direct message
 
   const STORAGE_KEY_PROFILE = "chatapp_user_profile";
   const STORAGE_KEY_HISTORY = "chatapp_history";
+  const STORAGE_KEY_GROUPS = "chatapp_groups";
 
   // Persistent User Profile State
   let userProfile = {
@@ -15,8 +16,28 @@
     avatarTextColor: "#FFFFFF"
   };
 
+  // Group Rooms State
+  let groupRooms = ["Group Chat"];
+  try {
+    const savedGroups = localStorage.getItem(STORAGE_KEY_GROUPS);
+    if (savedGroups) {
+      const parsed = JSON.parse(savedGroups);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        groupRooms = parsed;
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to load saved groups:", e);
+  }
+
+  function saveGroups() {
+    try {
+      localStorage.setItem(STORAGE_KEY_GROUPS, JSON.stringify(groupRooms));
+    } catch (e) {}
+  }
+
   let chatHistory = {
-    GROUP: []
+    "Group Chat": []
   };
   const unreadCounts = {};
   let typingTimer = null;
@@ -36,7 +57,7 @@
   ];
 
   function getAvatarColors(name) {
-    if (!name || name === "GROUP") return { bg: "#4F5BD5", text: "#FFFFFF" };
+    if (!name || groupRooms.includes(name) || name === "GROUP") return { bg: "#4F5BD5", text: "#FFFFFF" };
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -54,8 +75,9 @@
   const myUserTagEl = document.getElementById("my-user-tag");
   const myAvatarEl = document.getElementById("my-avatar");
   const desktopUserCard = document.getElementById("desktop-user-card");
-  const groupChannelBtn = document.getElementById("group-channel-btn");
-  const groupLastSnippet = document.getElementById("group-last-snippet");
+
+  // Rooms and Direct Messages Lists
+  const roomsList = document.getElementById("rooms-list");
   const onlineUsersList = document.getElementById("online-users-list");
   const userSearch = document.getElementById("user-search");
   const currentChatTitle = document.getElementById("current-chat-title");
@@ -72,6 +94,17 @@
   const emojiPopover = document.getElementById("emoji-popover");
   const btnSettings = document.getElementById("btn-settings");
   const btnChatOptions = document.getElementById("btn-chat-options");
+
+  // Create Group Modal Elements
+  const btnOpenCreateGroup = document.getElementById("btn-open-create-group");
+  const createGroupModal = document.getElementById("create-group-modal");
+  const btnCloseGroupModal = document.getElementById("btn-close-group-modal");
+  const btnCancelGroupModal = document.getElementById("btn-cancel-group-modal");
+  const createGroupForm = document.getElementById("create-group-form");
+  const groupNameInput = document.getElementById("group-name-input");
+  const previewGroupName = document.getElementById("preview-group-name");
+  const previewGroupHash = document.getElementById("preview-group-hash");
+  const mobileComposeBtn = document.getElementById("mobile-compose-btn");
 
   // Profile Modal Elements
   const profileModal = document.getElementById("profile-modal");
@@ -98,7 +131,7 @@
     const savedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
     if (savedHistory) {
       chatHistory = JSON.parse(savedHistory);
-      if (!chatHistory.GROUP) chatHistory.GROUP = [];
+      if (!chatHistory["Group Chat"]) chatHistory["Group Chat"] = [];
     }
   } catch (e) {
     console.warn("Failed to load saved history:", e);
@@ -264,25 +297,77 @@
       return;
     }
 
-    // 1. TYPING Notification: "TYPING:username"
+    // 1. GROUPLIST Update: "GROUPLIST:group1,group2,..."
+    if (raw.startsWith("GROUPLIST:")) {
+      const listStr = raw.substring(10);
+      const incoming = listStr.split(",").map(g => g.trim()).filter(Boolean);
+      incoming.forEach(g => {
+        if (!groupRooms.includes(g)) {
+          groupRooms.push(g);
+        }
+      });
+      saveGroups();
+      renderRoomsListUI();
+      return;
+    }
+
+    // 2. TYPING Notification: "TYPING:target:username" or "TYPING:username"
     if (raw.startsWith("TYPING:")) {
-      const sender = raw.substring(7).trim();
+      const rest = raw.substring(7).trim();
+      let target = "";
+      let sender = rest;
+      if (rest.includes(":")) {
+        const parts = rest.split(":", 2);
+        target = parts[0].trim();
+        sender = parts[1].trim();
+      }
       if (sender.toLowerCase() !== userProfile.username.toLowerCase()) {
-        if (currentChat === sender || (currentChat === "GROUP")) {
+        if (!target || target === currentChat || (groupRooms.includes(target) && target === currentChat)) {
           showTyping(sender);
         }
       }
       return;
     }
 
-    // 2. USERLIST Update: "USERLIST:user1,user2,..."
+    // 3. USERLIST Update: "USERLIST:user1,user2,..."
     if (raw.startsWith("USERLIST:")) {
       const usersStr = raw.substring(9);
       updateUsersList(usersStr);
       return;
     }
 
-    // 3. PRIVATE Message: "PRIVATE:sender:message"
+    // 4. GROUP_MSG Message: "GROUP_MSG:groupName:sender:message"
+    if (raw.startsWith("GROUP_MSG:")) {
+      const parts = raw.split(":");
+      if (parts.length >= 4) {
+        const groupName = parts[1].trim();
+        const sender = parts[2].trim();
+        const text = parts.slice(3).join(":").trim();
+        const time = formatTime(new Date());
+
+        if (!groupRooms.includes(groupName)) {
+          groupRooms.push(groupName);
+          saveGroups();
+        }
+
+        saveMessage(groupName, {
+          sender: sender,
+          text: text,
+          time: time,
+          type: sender.toLowerCase() === userProfile.username.toLowerCase() ? "me" : "other"
+        });
+
+        if (currentChat !== groupName) {
+          unreadCounts[groupName] = (unreadCounts[groupName] || 0) + 1;
+        } else {
+          renderMessages();
+        }
+        renderRoomsListUI();
+      }
+      return;
+    }
+
+    // 5. PRIVATE Message: "PRIVATE:sender:message"
     if (raw.startsWith("PRIVATE:")) {
       const parts = raw.split(":");
       if (parts.length >= 3) {
@@ -307,10 +392,10 @@
       return;
     }
 
-    // 4. System Join/Leave Broadcasts: "🟢 user joined" or "🔴 user left"
-    if (raw.startsWith("🟢 ") || raw.startsWith("🔴 ")) {
+    // 6. System Broadcasts: "🟢 user joined" or "🔴 user left" or "📢 ..."
+    if (raw.startsWith("🟢 ") || raw.startsWith("🔴 ") || raw.startsWith("📢")) {
       const time = formatTime(new Date());
-      saveMessage("GROUP", {
+      saveMessage(currentChat, {
         sender: "SYSTEM",
         text: raw,
         time: time,
@@ -320,31 +405,41 @@
       return;
     }
 
-    // 5. Normal Group Message: "sender: message"
+    // 7. System Warning/Error: "SYSTEM: ..."
+    if (raw.startsWith("SYSTEM:")) {
+      const time = formatTime(new Date());
+      saveMessage(currentChat, {
+        sender: "SYSTEM",
+        text: raw.substring(7).trim(),
+        time: time,
+        type: "system"
+      });
+      renderMessages();
+      return;
+    }
+
+    // 8. Legacy Group Message: "sender: message"
     const colonIndex = raw.indexOf(":");
     if (colonIndex !== -1) {
       const sender = raw.substring(0, colonIndex).trim();
       const text = raw.substring(colonIndex + 1).trim();
       const time = formatTime(new Date());
 
-      saveMessage("GROUP", {
+      const targetRoom = groupRooms.includes(currentChat) ? currentChat : "Group Chat";
+
+      saveMessage(targetRoom, {
         sender: sender,
         text: text,
         time: time,
         type: sender.toLowerCase() === userProfile.username.toLowerCase() ? "me" : "other"
       });
 
-      if (currentChat !== "GROUP") {
-        unreadCounts["GROUP"] = (unreadCounts["GROUP"] || 0) + 1;
-        updateGroupBadge();
+      if (currentChat !== targetRoom) {
+        unreadCounts[targetRoom] = (unreadCounts[targetRoom] || 0) + 1;
       } else {
         renderMessages();
       }
-
-      if (groupLastSnippet) {
-        const unread = unreadCounts["GROUP"] || 0;
-        groupLastSnippet.textContent = unread > 0 ? `${unread} new message${unread > 1 ? "s" : ""}` : `${sender}: ${text}`;
-      }
+      renderRoomsListUI();
     }
   }
 
@@ -484,29 +579,72 @@
   }
 
   if (userSearch) {
-    userSearch.addEventListener("input", renderUsersListUI);
+    userSearch.addEventListener("input", function () {
+      renderRoomsListUI();
+      renderUsersListUI();
+    });
+  }
+
+  // Render Rooms / Groups List in Sidebar
+  function renderRoomsListUI() {
+    if (!roomsList) return;
+    roomsList.innerHTML = "";
+
+    const query = (userSearch ? userSearch.value : "").trim().toLowerCase();
+
+    groupRooms.forEach(room => {
+      if (query && !room.toLowerCase().includes(query)) return;
+
+      const isActive = currentChat === room;
+      const unread = unreadCounts[room] || 0;
+
+      const history = chatHistory[room] || [];
+      const lastMsg = history.length > 0 ? history[history.length - 1] : null;
+      let previewText = "Public room &middot; Tap to chat";
+      if (lastMsg) {
+        if (lastMsg.type === "system") {
+          previewText = lastMsg.text;
+        } else {
+          previewText = (lastMsg.type === "me" ? "You: " : `${lastMsg.sender}: `) + lastMsg.text;
+        }
+      }
+
+      const row = document.createElement("div");
+      row.className = `channel-row ${isActive ? "active" : ""}`;
+      row.innerHTML = `
+        <div class="channel-hash">#</div>
+        <div class="channel-info-col">
+          <div class="channel-name">${escapeHtml(room)}</div>
+          <div class="channel-snippet">${previewText}</div>
+        </div>
+        ${unread > 0 ? `<span class="unread-bubble">${unread}</span>` : ""}
+      `;
+
+      row.addEventListener("click", () => switchChat(room, true));
+      roomsList.appendChild(row);
+    });
+
+    updateGroupBadge();
   }
 
   function updateGroupBadge() {
-    const badge = document.getElementById("unread-group");
-    const count = unreadCounts["GROUP"] || 0;
-    if (count > 0) {
-      badge.textContent = count;
-      badge.style.display = "flex";
-      if (navUnreadRooms) {
-        navUnreadRooms.textContent = count;
+    let totalUnread = 0;
+    groupRooms.forEach(r => {
+      totalUnread += (unreadCounts[r] || 0);
+    });
+    if (navUnreadRooms) {
+      if (totalUnread > 0) {
+        navUnreadRooms.textContent = totalUnread;
         navUnreadRooms.style.display = "flex";
-      }
-    } else {
-      badge.style.display = "none";
-      if (navUnreadRooms) {
+      } else {
         navUnreadRooms.style.display = "none";
       }
     }
   }
 
   // Switch Active Chat Window
-  function switchChat(chatKey) {
+  function switchChat(chatKey, isGroup) {
+    const isRoom = isGroup !== undefined ? isGroup : groupRooms.includes(chatKey);
     currentChat = chatKey;
     unreadCounts[chatKey] = 0;
 
@@ -516,11 +654,10 @@
       appWorkspace.classList.add("view-chat");
     }
 
-    if (chatKey === "GROUP") {
-      groupChannelBtn.classList.add("active");
-      currentChatTitle.textContent = "Group Chat";
-      currentChatSubtitle.innerHTML = `<span class="active-status-bullet">&bull;</span> Online &middot; Connected`;
-      messageInput.placeholder = "Message # Group Chat...";
+    if (isRoom) {
+      currentChatTitle.textContent = chatKey;
+      currentChatSubtitle.innerHTML = `<span class="active-status-bullet">&bull;</span> Public Room &middot; Connected`;
+      messageInput.placeholder = `Message #${chatKey}...`;
       if (activeChatAvatarText) {
         activeChatAvatarText.textContent = "#";
       } else {
@@ -530,10 +667,8 @@
       activeChatAvatar.style.color = "#A3B1FF";
       activeChatAvatar.style.borderRadius = "12px";
       if (activeChatIndicator) activeChatIndicator.style.display = "none";
-      updateGroupBadge();
       setActiveNavTab(navRoomsTab);
     } else {
-      groupChannelBtn.classList.remove("active");
       currentChatTitle.textContent = chatKey;
       currentChatSubtitle.innerHTML = `<span class="active-status-bullet">&bull;</span> Online &middot; Connected`;
       messageInput.placeholder = `Message ${chatKey}...`;
@@ -550,12 +685,80 @@
       setActiveNavTab(navChatsTab);
     }
 
+    renderRoomsListUI();
     renderUsersListUI();
     renderMessages();
     messageInput.focus();
   }
 
-  groupChannelBtn.addEventListener("click", () => switchChat("GROUP"));
+  // Create Group Modal Listeners
+  function openCreateGroupModal() {
+    if (createGroupModal) {
+      createGroupModal.classList.remove("hidden");
+      if (groupNameInput) {
+        groupNameInput.value = "";
+        if (previewGroupName) previewGroupName.textContent = "New Group";
+        setTimeout(() => groupNameInput.focus(), 60);
+      }
+    }
+  }
+
+  function closeCreateGroupModal() {
+    if (createGroupModal) {
+      createGroupModal.classList.add("hidden");
+    }
+  }
+
+  if (btnOpenCreateGroup) {
+    btnOpenCreateGroup.addEventListener("click", openCreateGroupModal);
+  }
+
+  if (mobileComposeBtn) {
+    mobileComposeBtn.addEventListener("click", openCreateGroupModal);
+  }
+
+  if (btnCloseGroupModal) {
+    btnCloseGroupModal.addEventListener("click", closeCreateGroupModal);
+  }
+
+  if (btnCancelGroupModal) {
+    btnCancelGroupModal.addEventListener("click", closeCreateGroupModal);
+  }
+
+  if (createGroupModal) {
+    createGroupModal.addEventListener("click", function (e) {
+      if (e.target === createGroupModal) closeCreateGroupModal();
+    });
+  }
+
+  if (groupNameInput) {
+    groupNameInput.addEventListener("input", function () {
+      const val = this.value.trim();
+      if (previewGroupName) {
+        previewGroupName.textContent = val ? val : "New Group";
+      }
+    });
+  }
+
+  if (createGroupForm) {
+    createGroupForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      const name = groupNameInput.value.trim();
+      if (!name) return;
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(`CREATE_GROUP:${name}`);
+      }
+
+      if (!groupRooms.includes(name)) {
+        groupRooms.push(name);
+        saveGroups();
+      }
+
+      closeCreateGroupModal();
+      switchChat(name, true);
+    });
+  }
 
   // Mobile Back Button: Returns to Inbox View
   if (mobileBackBtn) {
@@ -578,7 +781,8 @@
 
   if (navRoomsTab) {
     navRoomsTab.addEventListener("click", function () {
-      switchChat("GROUP");
+      const room = groupRooms.includes(currentChat) ? currentChat : (groupRooms[0] || "Group Chat");
+      switchChat(room, true);
       setActiveNavTab(navRoomsTab);
     });
   }
@@ -696,9 +900,9 @@
 
     const time = formatTime(new Date());
 
-    if (currentChat === "GROUP") {
-      // Normal broadcast
-      ws.send(text);
+    if (groupRooms.includes(currentChat) || currentChat === "GROUP") {
+      const room = currentChat === "GROUP" ? "Group Chat" : currentChat;
+      ws.send(`GROUP_MSG:${room}:${text}`);
     } else {
       // Private message protocol: "PRIVATE:recipient:message"
       ws.send(`PRIVATE:${currentChat}:${text}`);
@@ -720,7 +924,7 @@
   // Typing Notification
   messageInput.addEventListener("input", function () {
     if (!isTyping && ws && ws.readyState === WebSocket.OPEN) {
-      ws.send("TYPING");
+      ws.send(`TYPING:${currentChat}`);
       isTyping = true;
     }
     clearTimeout(typingTimer);
@@ -769,6 +973,7 @@
 
   // Initialize: Load existing profile from localStorage or prompt for first time
   loadOrCreateProfile();
+  renderRoomsListUI();
   renderMessages();
 
 })();

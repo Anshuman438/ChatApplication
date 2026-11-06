@@ -4,11 +4,14 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Central Chat Server managing both TCP and WebSocket clients.
- * Supports persistent user profiles and seamless page-refresh reconnection.
+ * Supports persistent user profiles, seamless page-refresh reconnection,
+ * and user-created chat groups/rooms.
  */
 public class Server {
 
@@ -31,6 +34,13 @@ public class Server {
     // Thread-safe list holding all active client sessions (TCP and WS)
     public static final List<ChatSession> clients = new CopyOnWriteArrayList<>();
 
+    // Thread-safe registry of active chat groups/rooms
+    public static final Set<String> groups = new ConcurrentSkipListSet<>(String.CASE_INSENSITIVE_ORDER);
+
+    static {
+        groups.add("Group Chat");
+    }
+
     /**
      * Broadcast a message to all connected clients.
      */
@@ -42,6 +52,44 @@ public class Server {
                 System.err.println("Broadcast delivery error: " + e.getMessage());
             }
         }
+    }
+
+    /**
+     * Broadcast the active groups list to all connected clients.
+     */
+    public static void broadcastGroupList() {
+        StringBuilder sb = new StringBuilder("GROUPLIST:");
+        boolean first = true;
+        for (String g : groups) {
+            if (!first) sb.append(",");
+            sb.append(g);
+            first = false;
+        }
+        broadcast(sb.toString());
+    }
+
+    /**
+     * Send the active groups list to a specific client session.
+     */
+    public static void sendGroupList(ChatSession session) {
+        StringBuilder sb = new StringBuilder("GROUPLIST:");
+        boolean first = true;
+        for (String g : groups) {
+            if (!first) sb.append(",");
+            sb.append(g);
+            first = false;
+        }
+        session.sendMessage(sb.toString());
+    }
+
+    /**
+     * Validate group name: 2-30 chars, alphanumeric, space, underscore, dash.
+     */
+    public static boolean isValidGroupName(String name) {
+        if (name == null) return false;
+        name = name.trim();
+        if (name.length() < 2 || name.length() > 30) return false;
+        return name.matches("^[\\p{L}0-9_ -]+$");
     }
 
     /**
@@ -114,6 +162,7 @@ public class Server {
         }
 
         session.sendMessage("WELCOME:" + session.getUserId() + ":" + username);
+        sendGroupList(session);
         updateUserLists();
     }
 
@@ -125,11 +174,45 @@ public class Server {
         message = message.trim();
         String username = sender.getUsername();
 
-        // Typing notification
-        if (message.equals("TYPING")) {
+        // Create Group: CREATE_GROUP:groupName
+        if (message.startsWith("CREATE_GROUP:")) {
+            String groupName = message.substring(13).trim();
+            if (!isValidGroupName(groupName)) {
+                sender.sendMessage("SYSTEM: Invalid group name. Must be 2-30 characters (letters, numbers, spaces, hyphens).");
+                return;
+            }
+            if (groups.contains(groupName)) {
+                sender.sendMessage("SYSTEM: Group '" + groupName + "' already exists.");
+                return;
+            }
+            groups.add(groupName);
+            System.out.println("📢 " + username + " created group #" + groupName);
+            broadcast("📢 " + username + " created group #" + groupName);
+            broadcastGroupList();
+            return;
+        }
+
+        // Group Message: GROUP_MSG:groupName:content
+        if (message.startsWith("GROUP_MSG:")) {
+            String[] parts = message.split(":", 3);
+            if (parts.length >= 3) {
+                String groupName = parts[1].trim();
+                String content = parts[2];
+                if (!groups.contains(groupName)) {
+                    groups.add(groupName);
+                    broadcastGroupList();
+                }
+                broadcast("GROUP_MSG:" + groupName + ":" + username + ":" + content);
+            }
+            return;
+        }
+
+        // Typing notification: TYPING or TYPING:target
+        if (message.startsWith("TYPING")) {
+            String target = message.contains(":") ? message.substring(message.indexOf(":") + 1).trim() : "Group Chat";
             for (ChatSession client : clients) {
                 if (client != sender) {
-                    client.sendMessage("TYPING:" + username);
+                    client.sendMessage("TYPING:" + target + ":" + username);
                 }
             }
             return;
@@ -160,8 +243,8 @@ public class Server {
             return;
         }
 
-        // Normal group broadcast
-        broadcast(username + ": " + message);
+        // Default broadcast to Group Chat
+        broadcast("GROUP_MSG:Group Chat:" + username + ":" + message);
     }
 
     /**

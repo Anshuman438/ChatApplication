@@ -97,15 +97,16 @@ public class ClientGUI {
     private final String userId;
     private String username;
     private final String serverUri;
-    private String currentChat = "GROUP";
+    private String currentChat = "Group Chat";
 
+    private final List<String> activeGroups = new ArrayList<>();
     private final HashMap<String, StringBuilder> chatHistoryHtml = new HashMap<>();
     private final HashMap<String, Integer> unreadCounts = new HashMap<>();
     private final List<String> onlineUsers = new ArrayList<>();
 
     // Model object for the conversations list
     public static class ChatListItem {
-        public final String id;       // "GROUP" or username
+        public final String id;       // room name or username
         public final String name;     // Display name
         public final boolean isGroup;
         public int unread;
@@ -128,7 +129,8 @@ public class ClientGUI {
         this.username = username;
         this.serverUri = serverUri;
 
-        chatHistoryHtml.put("GROUP", new StringBuilder());
+        activeGroups.add("Group Chat");
+        chatHistoryHtml.put("Group Chat", new StringBuilder());
         createGUI();
         connectWebSocket();
     }
@@ -260,6 +262,29 @@ public class ClientGUI {
             public void changedUpdate(DocumentEvent e) { refreshChatList(); }
         });
         searchPanel.add(searchField, BorderLayout.CENTER);
+
+        JButton newGroupBtn = new JButton("+ New") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(getModel().isRollover() ? ACCENT_HOVER : ACCENT);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                g2.setColor(Color.WHITE);
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                FontMetrics fm = g2.getFontMetrics();
+                g2.drawString("+ New", (getWidth() - fm.stringWidth("+ New")) / 2, (getHeight() + fm.getAscent() - fm.getDescent()) / 2);
+                g2.dispose();
+            }
+        };
+        newGroupBtn.setPreferredSize(new Dimension(58, 38));
+        newGroupBtn.setOpaque(false);
+        newGroupBtn.setBorder(null);
+        newGroupBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        newGroupBtn.setToolTipText("Create a new group");
+        newGroupBtn.addActionListener(e -> promptCreateGroup());
+        searchPanel.add(newGroupBtn, BorderLayout.EAST);
+
         sidebar.add(searchPanel, BorderLayout.NORTH);
 
         // Conversations List
@@ -516,17 +541,55 @@ public class ClientGUI {
             return;
         }
 
+        // Groups List update: "GROUPLIST:group1,group2,..."
+        if (message.startsWith("GROUPLIST:")) {
+            String listStr = message.substring(10);
+            SwingUtilities.invokeLater(() -> {
+                for (String g : listStr.split(",")) {
+                    g = g.trim();
+                    if (!g.isEmpty() && !activeGroups.contains(g)) {
+                        activeGroups.add(g);
+                    }
+                }
+                refreshChatList();
+            });
+            return;
+        }
+
+        // Group Message: "GROUP_MSG:groupName:sender:message"
+        if (message.startsWith("GROUP_MSG:")) {
+            String[] parts = message.split(":", 4);
+            if (parts.length >= 4) {
+                String groupName = parts[1].trim();
+                String sender = parts[2].trim();
+                String text = parts[3].trim();
+                String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+                boolean isMe = sender.equalsIgnoreCase(username);
+
+                SwingUtilities.invokeLater(() -> {
+                    if (!activeGroups.contains(groupName)) {
+                        activeGroups.add(groupName);
+                    }
+                    appendHtmlBubble(groupName, sender, text, time, isMe);
+                    if (!currentChat.equalsIgnoreCase(groupName)) {
+                        unreadCounts.put(groupName, unreadCounts.getOrDefault(groupName, 0) + 1);
+                        refreshChatList();
+                    }
+                });
+            }
+            return;
+        }
+
         // Typing indicator
         if (message.startsWith("TYPING:")) {
-            String user = message.substring(7).trim();
+            String rest = message.substring(7).trim();
+            String user = rest.contains(":") ? rest.substring(rest.indexOf(":") + 1) : rest;
             if (!user.equalsIgnoreCase(username)) {
                 SwingUtilities.invokeLater(() -> {
-                    if (currentChat.equalsIgnoreCase(user) || currentChat.equals("GROUP")) {
-                        typingLabel.setText(user + " is typing...");
-                        Timer t = new Timer(2000, e -> typingLabel.setText(" "));
-                        t.setRepeats(false);
-                        t.start();
-                    }
+                    typingLabel.setText(user + " is typing...");
+                    Timer t = new Timer(2000, e -> typingLabel.setText(" "));
+                    t.setRepeats(false);
+                    t.start();
                 });
             }
             return;
@@ -558,13 +621,19 @@ public class ClientGUI {
             return;
         }
 
-        // System join/leave broadcast
-        if (message.startsWith("🟢 ") || message.startsWith("🔴 ")) {
+        // System join/leave/broadcast announcements
+        if (message.startsWith("🟢 ") || message.startsWith("🔴 ") || message.startsWith("📢")) {
             SwingUtilities.invokeLater(() -> appendHtmlSystem(message));
             return;
         }
 
-        // Normal group broadcast
+        // System notices
+        if (message.startsWith("SYSTEM:")) {
+            SwingUtilities.invokeLater(() -> appendHtmlSystem(message.substring(7).trim()));
+            return;
+        }
+
+        // Normal group broadcast fallback
         int colon = message.indexOf(":");
         if (colon != -1) {
             String sender = message.substring(0, colon).trim();
@@ -573,12 +642,41 @@ public class ClientGUI {
             boolean isMe = sender.equalsIgnoreCase(username);
 
             SwingUtilities.invokeLater(() -> {
-                appendHtmlBubble("GROUP", sender, text, time, isMe);
-                if (!currentChat.equals("GROUP")) {
-                    unreadCounts.put("GROUP", unreadCounts.getOrDefault("GROUP", 0) + 1);
+                String targetRoom = isGroupChat(currentChat) ? currentChat : "Group Chat";
+                appendHtmlBubble(targetRoom, sender, text, time, isMe);
+                if (!currentChat.equals(targetRoom)) {
+                    unreadCounts.put(targetRoom, unreadCounts.getOrDefault(targetRoom, 0) + 1);
                     refreshChatList();
                 }
             });
+        }
+    }
+
+    private boolean isGroupChat(String chatId) {
+        return chatId != null && (chatId.equals("GROUP") || activeGroups.contains(chatId));
+    }
+
+    private void promptCreateGroup() {
+        String groupName = JOptionPane.showInputDialog(
+                frame,
+                "Enter group name (2-30 characters):",
+                "Create New Group",
+                JOptionPane.PLAIN_MESSAGE
+        );
+        if (groupName != null) {
+            groupName = groupName.trim();
+            if (groupName.length() >= 2 && groupName.length() <= 30) {
+                if (wsClient != null && wsClient.isOpen()) {
+                    wsClient.send("CREATE_GROUP:" + groupName);
+                }
+                if (!activeGroups.contains(groupName)) {
+                    activeGroups.add(groupName);
+                }
+                refreshChatList();
+                openChat(groupName);
+            } else if (!groupName.isEmpty()) {
+                JOptionPane.showMessageDialog(frame, "Group name must be between 2 and 30 characters.", "Invalid Name", JOptionPane.WARNING_MESSAGE);
+            }
         }
     }
 
@@ -586,10 +684,10 @@ public class ClientGUI {
         currentChat = chatId;
         unreadCounts.put(chatId, 0);
 
-        if (chatId.equals("GROUP")) {
-            chatTitle.setText("Group Chat");
-            chatSubtitle.setText("Public broadcast room for all connected web & desktop users");
-            messageField.setToolTipText("Message # Group Chat...");
+        if (isGroupChat(chatId)) {
+            chatTitle.setText("# " + chatId);
+            chatSubtitle.setText("Public group room for connected users");
+            messageField.setToolTipText("Message #" + chatId + "...");
             updateActiveAvatar("#", new Color(0x1A, 0x20, 0x30), false);
         } else {
             chatTitle.setText(chatId);
@@ -619,8 +717,9 @@ public class ClientGUI {
 
         String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
 
-        if (currentChat.equals("GROUP")) {
-            wsClient.send(msg);
+        if (isGroupChat(currentChat)) {
+            String roomName = currentChat.equals("GROUP") ? "Group Chat" : currentChat;
+            wsClient.send("GROUP_MSG:" + roomName + ":" + msg);
         } else {
             wsClient.send("PRIVATE:" + currentChat + ":" + msg);
             appendHtmlBubble(currentChat, "Me", msg, time, true);
@@ -710,10 +809,12 @@ public class ClientGUI {
 
         chatListModel.clear();
 
-        // Always show group chat if it matches or filter is empty
-        if (filter.isEmpty() || "group chat".contains(filter)) {
-            int unread = unreadCounts.getOrDefault("GROUP", 0);
-            chatListModel.addElement(new ChatListItem("GROUP", "Group Chat", true, unread));
+        // Render all active group rooms
+        for (String group : activeGroups) {
+            if (filter.isEmpty() || group.toLowerCase().contains(filter)) {
+                int unread = unreadCounts.getOrDefault(group, 0);
+                chatListModel.addElement(new ChatListItem(group, "# " + group, true, unread));
+            }
         }
 
         // Direct messages
