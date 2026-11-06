@@ -98,6 +98,7 @@ public class ClientGUI {
     private String username;
     private final String serverUri;
     private String currentChat = "Group Chat";
+    private boolean isUpdatingList = false;
 
     private final List<String> activeGroups = new ArrayList<>();
     private final HashMap<String, StringBuilder> chatHistoryHtml = new HashMap<>();
@@ -464,9 +465,9 @@ public class ClientGUI {
         });
 
         chatList.addListSelectionListener(e -> {
-            if (e.getValueIsAdjusting()) return;
+            if (e.getValueIsAdjusting() || isUpdatingList) return;
             ChatListItem item = chatList.getSelectedValue();
-            if (item != null) {
+            if (item != null && !item.id.equals(currentChat)) {
                 openChat(item.id);
             }
         });
@@ -803,34 +804,40 @@ public class ClientGUI {
     }
 
     private void refreshChatList() {
-        String filter = (searchField != null ? searchField.getText() : "").trim().toLowerCase();
-        ChatListItem selected = chatList != null ? chatList.getSelectedValue() : null;
-        String selectedId = selected != null ? selected.id : currentChat;
+        if (isUpdatingList) return;
+        isUpdatingList = true;
+        try {
+            String filter = (searchField != null ? searchField.getText() : "").trim().toLowerCase();
+            ChatListItem selected = chatList != null ? chatList.getSelectedValue() : null;
+            String selectedId = selected != null ? selected.id : currentChat;
 
-        chatListModel.clear();
+            chatListModel.clear();
 
-        // Render all active group rooms
-        for (String group : activeGroups) {
-            if (filter.isEmpty() || group.toLowerCase().contains(filter)) {
-                int unread = unreadCounts.getOrDefault(group, 0);
-                chatListModel.addElement(new ChatListItem(group, "# " + group, true, unread));
+            // Render all active group rooms
+            for (String group : activeGroups) {
+                if (filter.isEmpty() || group.toLowerCase().contains(filter)) {
+                    int unread = unreadCounts.getOrDefault(group, 0);
+                    chatListModel.addElement(new ChatListItem(group, "# " + group, true, unread));
+                }
             }
-        }
 
-        // Direct messages
-        for (String user : onlineUsers) {
-            if (filter.isEmpty() || user.toLowerCase().contains(filter)) {
-                int unread = unreadCounts.getOrDefault(user, 0);
-                chatListModel.addElement(new ChatListItem(user, user, false, unread));
+            // Direct messages
+            for (String user : onlineUsers) {
+                if (filter.isEmpty() || user.toLowerCase().contains(filter)) {
+                    int unread = unreadCounts.getOrDefault(user, 0);
+                    chatListModel.addElement(new ChatListItem(user, user, false, unread));
+                }
             }
-        }
 
-        // Restore selection
-        for (int i = 0; i < chatListModel.size(); i++) {
-            if (chatListModel.get(i).id.equals(selectedId)) {
-                chatList.setSelectedIndex(i);
-                break;
+            // Restore selection
+            for (int i = 0; i < chatListModel.size(); i++) {
+                if (chatListModel.get(i).id.equals(selectedId)) {
+                    chatList.setSelectedIndex(i);
+                    break;
+                }
             }
+        } finally {
+            isUpdatingList = false;
         }
     }
 
@@ -905,18 +912,25 @@ public class ClientGUI {
 
     // Avatar custom component
     static class RoundedAvatarPanel extends JPanel {
-        private final String letter;
-        private final Color bgColor;
+        private String letter;
+        private Color bgColor;
         private final int size;
-        private final boolean isCircle;
+        private boolean isCircle;
 
         public RoundedAvatarPanel(String letter, Color bgColor, int size, boolean isCircle) {
-            this.letter = letter;
+            this.letter = letter != null ? letter : "?";
             this.bgColor = bgColor;
             this.size = size;
             this.isCircle = isCircle;
             setPreferredSize(new Dimension(size, size));
             setOpaque(false);
+        }
+
+        public void update(String letter, Color bgColor, boolean isCircle) {
+            this.letter = letter != null ? letter : "?";
+            this.bgColor = bgColor;
+            this.isCircle = isCircle;
+            repaint();
         }
 
         @Override
@@ -1008,12 +1022,11 @@ public class ClientGUI {
                 nameLabel.setText(item.name);
                 if (item.isGroup) {
                     subtitleLabel.setText("Public room");
-                    avatarPanel.removeAll();
-                    avatarPanel.add(new RoundedAvatarPanel("#", new Color(0x1A, 0x20, 0x30), 38, false));
+                    avatarPanel.update("#", new Color(0x1A, 0x20, 0x30), false);
                 } else {
                     subtitleLabel.setText("Online");
-                    avatarPanel.removeAll();
-                    avatarPanel.add(new RoundedAvatarPanel(item.name.substring(0, 1).toUpperCase(), getAvatarColor(item.name), 38, true));
+                    String letter = (item.name != null && !item.name.isEmpty()) ? item.name.substring(0, 1).toUpperCase() : "?";
+                    avatarPanel.update(letter, getAvatarColor(item.name), true);
                 }
 
                 if (item.unread > 0) {
