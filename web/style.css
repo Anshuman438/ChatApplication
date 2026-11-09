@@ -694,6 +694,45 @@ input::placeholder {
   color: #FFFFFF;
 }
 
+.header-action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-subtle-action {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(79, 91, 213, 0.12);
+  border: 1px solid rgba(79, 91, 213, 0.28);
+  color: #A3B1FF;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-subtle-action:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #FFFFFF;
+}
+
+.btn-subtle-action.btn-clear-action {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #F87171;
+}
+
+.btn-subtle-action.btn-clear-action:hover {
+  background: #EF4444;
+  border-color: #EF4444;
+  color: #FFFFFF;
+}
+
 .rooms-stack {
   display: flex;
   flex-direction: column;
@@ -873,6 +912,111 @@ input::placeholder {
   font-size: 13px;
   color: var(--text-muted);
   text-align: center;
+}
+
+/* Inline Remove User Button on user-row */
+.user-row {
+  position: relative;
+}
+
+.btn-remove-user {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(239, 68, 68, 0.12);
+  color: #F87171;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+  z-index: 3;
+  padding: 0;
+}
+
+.user-row:hover .btn-remove-user {
+  opacity: 1;
+}
+
+.btn-remove-user:hover {
+  background: #EF4444;
+  color: #FFFFFF;
+}
+
+/* Chat Options Dropdown Menu */
+.chat-options-dropdown-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.chat-options-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 175px;
+  background: #141824;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 6px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  backdrop-filter: blur(16px);
+  animation: dropdownFadeIn 0.15s ease-out;
+}
+
+.chat-options-menu.hidden {
+  display: none !important;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-options-menu .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #E2E8F0;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.chat-options-menu .menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+}
+
+.chat-options-menu .menu-item.text-danger {
+  color: #F87171;
+}
+
+.chat-options-menu .menu-item.text-danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #FF6B6B;
 }
 
 /* Desktop App Promo Banner Card */
@@ -1581,6 +1725,10 @@ input::placeholder {
 
   .composer-container {
     padding: 4px 14px 12px;
+  }
+
+  .btn-remove-user {
+    opacity: 0.8;
   }
 
   .emoji-popover {

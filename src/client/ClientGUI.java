@@ -20,7 +20,9 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.prefs.Preferences;
 
 public class ClientGUI {
@@ -104,6 +106,7 @@ public class ClientGUI {
     private final HashMap<String, StringBuilder> chatHistoryHtml = new HashMap<>();
     private final HashMap<String, Integer> unreadCounts = new HashMap<>();
     private final List<String> onlineUsers = new ArrayList<>();
+    private final Set<String> removedUsers = new HashSet<>();
 
     // Model object for the conversations list
     public static class ChatListItem {
@@ -132,6 +135,16 @@ public class ClientGUI {
 
         activeGroups.add("Group Chat");
         chatHistoryHtml.put("Group Chat", new StringBuilder());
+
+        // Initialize demo users
+        String[] demos = {"Alex", "Sarah", "Liam", "Nova AI"};
+        for (String d : demos) {
+            if (!d.equalsIgnoreCase(username)) {
+                onlineUsers.add(d);
+                chatHistoryHtml.put(d, new StringBuilder());
+            }
+        }
+
         createGUI();
         connectWebSocket();
     }
@@ -294,6 +307,40 @@ public class ClientGUI {
         chatList.setBackground(BG_SIDEBAR);
         chatList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         chatList.setCellRenderer(new ModernChatListRenderer());
+
+        // Right-Click Context Menu for Conversations List
+        JPopupMenu chatListPopup = new JPopupMenu();
+        JMenuItem removeUserItem = new JMenuItem("Remove User");
+        JMenuItem clearUsersItem = new JMenuItem("Clear Other Users");
+        JMenuItem addDemoUsersItem = new JMenuItem("Add Demo Users");
+        chatListPopup.add(removeUserItem);
+        chatListPopup.addSeparator();
+        chatListPopup.add(clearUsersItem);
+        chatListPopup.add(addDemoUsersItem);
+
+        removeUserItem.addActionListener(e -> {
+            ChatListItem item = chatList.getSelectedValue();
+            if (item != null && !item.isGroup) {
+                removeUserFromList(item.id);
+            }
+        });
+        clearUsersItem.addActionListener(e -> clearAllUsers());
+        addDemoUsersItem.addActionListener(e -> addDemoUsers());
+
+        chatList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    int index = chatList.locationToIndex(e.getPoint());
+                    if (index >= 0) {
+                        chatList.setSelectedIndex(index);
+                        ChatListItem item = chatListModel.get(index);
+                        removeUserItem.setEnabled(!item.isGroup);
+                        chatListPopup.show(chatList, e.getX(), e.getY());
+                    }
+                }
+            }
+        });
 
         JScrollPane sidebarScroll = new JScrollPane(chatList);
         sidebarScroll.setBorder(null);
@@ -710,18 +757,100 @@ public class ClientGUI {
         activeAvatarPanel.repaint();
     }
 
+    private boolean isDemoUser(String u) {
+        if (u == null) return false;
+        return u.equalsIgnoreCase("Alex") || u.equalsIgnoreCase("Sarah") ||
+               u.equalsIgnoreCase("Liam") || u.equalsIgnoreCase("Nova AI");
+    }
+
+    private void simulateDemoReply(String dummyName) {
+        Timer typingTimer = new Timer(500, e -> {
+            if (currentChat.equalsIgnoreCase(dummyName)) {
+                typingLabel.setText(dummyName + " is typing...");
+            }
+        });
+        typingTimer.setRepeats(false);
+        typingTimer.start();
+
+        Timer replyTimer = new Timer(1800, e -> {
+            typingLabel.setText(" ");
+            String reply;
+            if (dummyName.equalsIgnoreCase("Alex")) {
+                reply = "Love the typography and layout here! 🎨";
+            } else if (dummyName.equalsIgnoreCase("Sarah")) {
+                reply = "Pushed the latest updates! WebSockets latency is lightning fast. 🚀";
+            } else if (dummyName.equalsIgnoreCase("Liam")) {
+                reply = "The desktop jar app runs completely smooth with no memory leaks! 📱";
+            } else {
+                reply = "Nova AI here! Antigravity chat handles multi-client synchronization flawlessly. ⚡";
+            }
+            String t = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+            appendHtmlBubble(dummyName, dummyName, reply, t, false);
+            if (!currentChat.equalsIgnoreCase(dummyName)) {
+                unreadCounts.put(dummyName, unreadCounts.getOrDefault(dummyName, 0) + 1);
+            }
+            refreshChatList();
+        });
+        replyTimer.setRepeats(false);
+        replyTimer.start();
+    }
+
+    private void removeUserFromList(String u) {
+        if (u == null) return;
+        removedUsers.add(u.toLowerCase());
+        onlineUsers.remove(u);
+        if (wsClient != null && wsClient.isOpen()) {
+            wsClient.send("REMOVE_USER:" + u);
+        }
+        if (currentChat.equalsIgnoreCase(u)) {
+            openChat("Group Chat");
+        }
+        refreshChatList();
+    }
+
+    private void clearAllUsers() {
+        for (String u : onlineUsers) {
+            removedUsers.add(u.toLowerCase());
+        }
+        onlineUsers.clear();
+        if (wsClient != null && wsClient.isOpen()) {
+            wsClient.send("CLEAR_USERS");
+        }
+        if (!isGroupChat(currentChat)) {
+            openChat("Group Chat");
+        }
+        refreshChatList();
+    }
+
+    private void addDemoUsers() {
+        String[] demos = {"Alex", "Sarah", "Liam", "Nova AI"};
+        for (String d : demos) {
+            removedUsers.remove(d.toLowerCase());
+            if (!d.equalsIgnoreCase(username) && !onlineUsers.contains(d)) {
+                onlineUsers.add(d);
+                chatHistoryHtml.putIfAbsent(d, new StringBuilder());
+            }
+        }
+        refreshChatList();
+    }
+
     private void sendMessage() {
         String msg = messageField.getText().trim();
-        if (msg.isEmpty() || wsClient == null || !wsClient.isOpen()) {
+        if (msg.isEmpty()) {
             return;
         }
 
         String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
 
         if (isGroupChat(currentChat)) {
+            if (wsClient == null || !wsClient.isOpen()) return;
             String roomName = currentChat.equals("GROUP") ? "Group Chat" : currentChat;
             wsClient.send("GROUP_MSG:" + roomName + ":" + msg);
+        } else if (isDemoUser(currentChat)) {
+            appendHtmlBubble(currentChat, "Me", msg, time, true);
+            simulateDemoReply(currentChat);
         } else {
+            if (wsClient == null || !wsClient.isOpen()) return;
             wsClient.send("PRIVATE:" + currentChat + ":" + msg);
             appendHtmlBubble(currentChat, "Me", msg, time, true);
         }
@@ -793,11 +922,20 @@ public class ClientGUI {
 
         for (String u : users) {
             u = u.trim();
-            if (u.isEmpty() || u.equalsIgnoreCase(username) || u.contains("HTTP/") || u.contains("Go-http-client")) {
+            if (u.isEmpty() || u.equalsIgnoreCase(username) || u.contains("HTTP/") || u.contains("Go-http-client") || removedUsers.contains(u.toLowerCase())) {
                 continue;
             }
             onlineUsers.add(u);
             chatHistoryHtml.putIfAbsent(u, new StringBuilder());
+        }
+
+        // Keep active demo users if not explicitly removed
+        String[] demos = {"Alex", "Sarah", "Liam", "Nova AI"};
+        for (String d : demos) {
+            if (!d.equalsIgnoreCase(username) && !removedUsers.contains(d.toLowerCase()) && !onlineUsers.contains(d)) {
+                onlineUsers.add(d);
+                chatHistoryHtml.putIfAbsent(d, new StringBuilder());
+            }
         }
 
         refreshChatList();

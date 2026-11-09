@@ -6,6 +6,80 @@
   const STORAGE_KEY_PROFILE = "chatapp_user_profile";
   const STORAGE_KEY_HISTORY = "chatapp_history";
   const STORAGE_KEY_GROUPS = "chatapp_groups";
+  const STORAGE_KEY_REMOVED_USERS = "chatapp_removed_users";
+
+  // Pre-configured engaging demo users
+  const DUMMY_PERSONAS = [
+    {
+      name: "Alex",
+      status: "UI/UX Designer",
+      welcomeMsg: "Hey! The dark theme interface looks super crisp ✨",
+      replies: [
+        "Love the typography and layout here!",
+        "Working on the next component iteration, what do you think?",
+        "That looks great, really responsive on mobile too!",
+        "Awesome! Let me know if you need any icon or color tweaks."
+      ]
+    },
+    {
+      name: "Sarah",
+      status: "Full-Stack Dev",
+      welcomeMsg: "Hey! Just pushed the latest updates to the server 🚀",
+      replies: [
+        "Everything compiles cleanly on Maven and Docker!",
+        "WebSockets latency is virtually instantaneous right now.",
+        "Checked the logs, zero packet drops or connection issues.",
+        "Sounds good! Let's ship it."
+      ]
+    },
+    {
+      name: "Liam",
+      status: "Mobile Engineer",
+      welcomeMsg: "Hi! Tested the offline .jar desktop app and mobile web view.",
+      replies: [
+        "Touch gestures and room navigation feel so native now.",
+        "The jar executable runs completely smooth with no memory leaks.",
+        "Nice! The group chat and DM routing work seamlessly.",
+        "Catch you in the next build!"
+      ]
+    },
+    {
+      name: "Nova AI",
+      status: "AI Assistant",
+      welcomeMsg: "Hello! I'm Nova, your real-time chat assistant. How can I help today?",
+      replies: [
+        "I'm here to test multi-user messaging, latency, and group synchronization!",
+        "Antigravity chat handles concurrent WebSocket connections smoothly.",
+        "Your message was received and processed in less than 5 milliseconds.",
+        "Everything looks operational and ready for prime time!"
+      ]
+    }
+  ];
+
+  // Set of usernames removed by the user
+  let removedUsers = new Set();
+  try {
+    const savedRemoved = localStorage.getItem(STORAGE_KEY_REMOVED_USERS);
+    if (savedRemoved) {
+      const parsed = JSON.parse(savedRemoved);
+      if (Array.isArray(parsed)) {
+        removedUsers = new Set(parsed.map(u => u.toLowerCase()));
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to load removed users:", e);
+  }
+
+  function saveRemovedUsers() {
+    try {
+      localStorage.setItem(STORAGE_KEY_REMOVED_USERS, JSON.stringify(Array.from(removedUsers)));
+    } catch (e) {}
+  }
+
+  function isDummyUser(name) {
+    if (!name) return false;
+    return DUMMY_PERSONAS.some(p => p.name.toLowerCase() === name.toLowerCase());
+  }
 
   // Persistent User Profile State
   let userProfile = {
@@ -94,6 +168,12 @@
   const emojiPopover = document.getElementById("emoji-popover");
   const btnSettings = document.getElementById("btn-settings");
   const btnChatOptions = document.getElementById("btn-chat-options");
+  const chatOptionsMenu = document.getElementById("chat-options-menu");
+  const menuBtnProfile = document.getElementById("menu-btn-profile");
+  const menuBtnClearChat = document.getElementById("menu-btn-clear-chat");
+  const menuBtnRemoveActiveUser = document.getElementById("menu-btn-remove-active-user");
+  const btnAddDummyUsers = document.getElementById("btn-add-dummy-users");
+  const btnClearUsers = document.getElementById("btn-clear-users");
 
   // Create Group Modal Elements
   const btnOpenCreateGroup = document.getElementById("btn-open-create-group");
@@ -135,6 +215,31 @@
     }
   } catch (e) {
     console.warn("Failed to load saved history:", e);
+  }
+
+  // Pre-seed initial greeting messages for demo personas
+  function initDummyUsersHistory() {
+    DUMMY_PERSONAS.forEach(p => {
+      if (!chatHistory[p.name] || chatHistory[p.name].length === 0) {
+        chatHistory[p.name] = [
+          {
+            sender: p.name,
+            text: p.welcomeMsg,
+            time: formatTime(new Date()),
+            type: "other"
+          }
+        ];
+      }
+    });
+    persistHistory();
+  }
+
+  // Auto-init dummy users on first load
+  if (localStorage.getItem("chatapp_dummy_initialized") !== "true") {
+    initDummyUsersHistory();
+    try {
+      localStorage.setItem("chatapp_dummy_initialized", "true");
+    } catch (e) {}
   }
 
   // Load or Initialize Persistent User Profile
@@ -524,20 +629,48 @@
       .split(",")
       .map(u => u.trim())
       .filter(u => u.length > 0 && 
-                   u.toLowerCase() !== userProfile.username.toLowerCase() && 
+                   u.toLowerCase() !== (userProfile.username || "").toLowerCase() && 
                    !u.includes("HTTP/") && 
                    !u.includes("Go-http-client"));
 
     renderUsersListUI();
   }
 
+  // Get active combined users (Real online clients + Dummy demo users, excluding any removed)
+  function getCombinedUsers() {
+    const combined = [];
+    const seen = new Set();
+    const myName = (userProfile.username || "").toLowerCase();
+
+    // 1. Add real active users from server
+    activeUsers.forEach(u => {
+      const lower = u.toLowerCase();
+      if (!removedUsers.has(lower) && !seen.has(lower) && lower !== myName) {
+        seen.add(lower);
+        combined.push(u);
+      }
+    });
+
+    // 2. Add dummy personas that haven't been removed
+    DUMMY_PERSONAS.forEach(p => {
+      const lower = p.name.toLowerCase();
+      if (!removedUsers.has(lower) && !seen.has(lower) && lower !== myName) {
+        seen.add(lower);
+        combined.push(p.name);
+      }
+    });
+
+    return combined;
+  }
+
   function renderUsersListUI() {
     onlineUsersList.innerHTML = "";
 
+    const combined = getCombinedUsers();
     const query = (userSearch ? userSearch.value : "").trim().toLowerCase();
     const filtered = query 
-      ? activeUsers.filter(u => u.toLowerCase().includes(query)) 
-      : activeUsers;
+      ? combined.filter(u => u.toLowerCase().includes(query)) 
+      : combined;
 
     if (filtered.length === 0) {
       onlineUsersList.innerHTML = `<div class="empty-notice">${query ? "No users matching search" : "No other users online yet"}</div>`;
@@ -553,9 +686,10 @@
       // Last message preview if any
       const history = chatHistory[user] || [];
       const lastMsg = history.length > 0 ? history[history.length - 1] : null;
+      const isDemo = isDummyUser(user);
       const previewText = lastMsg 
         ? (lastMsg.type === "me" ? "You: " : "") + lastMsg.text 
-        : "Online";
+        : (isDemo ? "Online · Demo user" : "Online");
       const previewTime = lastMsg ? lastMsg.time : "";
 
       row.innerHTML = `
@@ -571,11 +705,75 @@
           <div class="user-snippet">${escapeHtml(previewText)}</div>
         </div>
         ${unread > 0 ? `<span class="unread-bubble">${unread}</span>` : ""}
+        <button type="button" class="btn-remove-user" title="Remove ${escapeHtml(user)}" aria-label="Remove user">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       `;
+
+      // Inline Remove Button
+      const btnRemove = row.querySelector(".btn-remove-user");
+      if (btnRemove) {
+        btnRemove.addEventListener("click", function (e) {
+          e.stopPropagation();
+          removeUser(user);
+        });
+      }
 
       row.addEventListener("click", () => switchChat(user));
       onlineUsersList.appendChild(row);
     });
+  }
+
+  // Remove individual user
+  function removeUser(user) {
+    if (!user) return;
+    const lower = user.toLowerCase();
+    removedUsers.add(lower);
+    saveRemovedUsers();
+
+    // Notify backend WebSocket server to prune this user session
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(`REMOVE_USER:${user}`);
+    }
+
+    // If currently chatting with this user, switch back to Group Chat
+    if (currentChat === user) {
+      switchChat("Group Chat");
+    }
+
+    renderUsersListUI();
+  }
+
+  // Clear all other users from list
+  function clearAllUsers() {
+    const combined = getCombinedUsers();
+    combined.forEach(u => {
+      removedUsers.add(u.toLowerCase());
+    });
+    saveRemovedUsers();
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send("CLEAR_USERS");
+    }
+
+    if (!groupRooms.includes(currentChat)) {
+      switchChat("Group Chat");
+    }
+
+    renderUsersListUI();
+  }
+
+  // Restore pre-configured demo users
+  function restoreDemoUsers() {
+    DUMMY_PERSONAS.forEach(p => {
+      removedUsers.delete(p.name.toLowerCase());
+    });
+    saveRemovedUsers();
+    initDummyUsersHistory();
+    renderUsersListUI();
   }
 
   if (userSearch) {
@@ -648,6 +846,9 @@
     currentChat = chatKey;
     unreadCounts[chatKey] = 0;
 
+    // Hide chat options dropdown when switching
+    if (chatOptionsMenu) chatOptionsMenu.classList.add("hidden");
+
     // On mobile, switch to conversation view
     if (window.innerWidth <= 768 && appWorkspace) {
       appWorkspace.classList.remove("view-inbox");
@@ -667,6 +868,7 @@
       activeChatAvatar.style.color = "#A3B1FF";
       activeChatAvatar.style.borderRadius = "12px";
       if (activeChatIndicator) activeChatIndicator.style.display = "none";
+      if (menuBtnRemoveActiveUser) menuBtnRemoveActiveUser.style.display = "none";
       setActiveNavTab(navRoomsTab);
     } else {
       currentChatTitle.textContent = chatKey;
@@ -682,6 +884,11 @@
       activeChatAvatar.style.color = colors.text;
       activeChatAvatar.style.borderRadius = "50%";
       if (activeChatIndicator) activeChatIndicator.style.display = "block";
+      if (menuBtnRemoveActiveUser) {
+        menuBtnRemoveActiveUser.style.display = "flex";
+        const labelEl = menuBtnRemoveActiveUser.querySelector("span");
+        if (labelEl) labelEl.textContent = `Remove ${chatKey}`;
+      }
       setActiveNavTab(navChatsTab);
     }
 
@@ -827,9 +1034,57 @@
     });
   }
 
-  if (btnChatOptions) {
-    btnChatOptions.addEventListener("click", function () {
+  // Direct Messages Section Header Actions
+  if (btnAddDummyUsers) {
+    btnAddDummyUsers.addEventListener("click", function (e) {
+      e.stopPropagation();
+      restoreDemoUsers();
+    });
+  }
+
+  if (btnClearUsers) {
+    btnClearUsers.addEventListener("click", function (e) {
+      e.stopPropagation();
+      clearAllUsers();
+    });
+  }
+
+  // Chat Options Dropdown Toggle & Actions
+  if (btnChatOptions && chatOptionsMenu) {
+    btnChatOptions.addEventListener("click", function (e) {
+      e.stopPropagation();
+      chatOptionsMenu.classList.toggle("hidden");
+    });
+
+    document.addEventListener("click", function (e) {
+      if (!chatOptionsMenu.contains(e.target) && e.target !== btnChatOptions) {
+        chatOptionsMenu.classList.add("hidden");
+      }
+    });
+  }
+
+  if (menuBtnProfile) {
+    menuBtnProfile.addEventListener("click", function () {
+      if (chatOptionsMenu) chatOptionsMenu.classList.add("hidden");
       openProfileModal();
+    });
+  }
+
+  if (menuBtnClearChat) {
+    menuBtnClearChat.addEventListener("click", function () {
+      if (chatOptionsMenu) chatOptionsMenu.classList.add("hidden");
+      chatHistory[currentChat] = [];
+      persistHistory();
+      renderMessages();
+      renderRoomsListUI();
+      renderUsersListUI();
+    });
+  }
+
+  if (menuBtnRemoveActiveUser) {
+    menuBtnRemoveActiveUser.addEventListener("click", function () {
+      if (chatOptionsMenu) chatOptionsMenu.classList.add("hidden");
+      removeUser(currentChat);
     });
   }
 
@@ -892,20 +1147,62 @@
     });
   }
 
+  // Simulated smart response from demo persona
+  function handleDummyUserReply(dummyName, userText) {
+    const persona = DUMMY_PERSONAS.find(p => p.name.toLowerCase() === dummyName.toLowerCase());
+    if (!persona) return;
+
+    // Show typing bubble after 500ms
+    setTimeout(() => {
+      if (currentChat === dummyName) {
+        showTyping(dummyName);
+      }
+    }, 500);
+
+    // Send realistic response after delay
+    const delay = 1300 + Math.random() * 800;
+    setTimeout(() => {
+      if (typingRow) typingRow.style.display = "none";
+
+      const replyText = persona.replies[Math.floor(Math.random() * persona.replies.length)];
+      const time = formatTime(new Date());
+
+      saveMessage(dummyName, {
+        sender: dummyName,
+        text: replyText,
+        time: time,
+        type: "other"
+      });
+
+      if (currentChat !== dummyName) {
+        unreadCounts[dummyName] = (unreadCounts[dummyName] || 0) + 1;
+      } else {
+        renderMessages();
+      }
+      renderUsersListUI();
+    }, delay);
+  }
+
   // Send Message
   messageForm.addEventListener("submit", function (e) {
     e.preventDefault();
     const text = messageInput.value.trim();
-    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!text) return;
 
     const time = formatTime(new Date());
 
     if (groupRooms.includes(currentChat) || currentChat === "GROUP") {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
       const room = currentChat === "GROUP" ? "Group Chat" : currentChat;
       ws.send(`GROUP_MSG:${room}:${text}`);
     } else {
-      // Private message protocol: "PRIVATE:recipient:message"
-      ws.send(`PRIVATE:${currentChat}:${text}`);
+      // Check if chatting with a dummy persona
+      if (isDummyUser(currentChat)) {
+        handleDummyUserReply(currentChat, text);
+      } else if (ws && ws.readyState === WebSocket.OPEN) {
+        // Private message protocol: "PRIVATE:recipient:message"
+        ws.send(`PRIVATE:${currentChat}:${text}`);
+      }
 
       saveMessage(currentChat, {
         sender: "Me",
@@ -974,6 +1271,7 @@
   // Initialize: Load existing profile from localStorage or prompt for first time
   loadOrCreateProfile();
   renderRoomsListUI();
+  renderUsersListUI();
   renderMessages();
 
 })();

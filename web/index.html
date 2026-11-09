@@ -216,7 +216,13 @@
           </div>
           <div id="rooms-list" class="rooms-stack"></div>
 
-          <div class="list-section-header">DIRECT MESSAGES</div>
+          <div class="list-section-header section-header-action">
+            <span>DIRECT MESSAGES</span>
+            <div class="header-action-group">
+              <button type="button" class="btn-subtle-action" id="btn-add-dummy-users" title="Restore Demo Users">+ Demo Users</button>
+              <button type="button" class="btn-subtle-action btn-clear-action" id="btn-clear-users" title="Clear Users">Clear</button>
+            </div>
+          </div>
           <div id="online-users-list" class="users-stack">
             <div class="empty-notice">No other users online yet</div>
           </div>
@@ -282,13 +288,29 @@
                 <path d="M20 20l-3.5-3.5"></path>
               </svg>
             </button>
-            <button class="icon-btn" id="btn-chat-options" title="More options / Profile">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="5" r="2"></circle>
-                <circle cx="12" cy="12" r="2"></circle>
-                <circle cx="12" cy="19" r="2"></circle>
-              </svg>
-            </button>
+            <div class="chat-options-dropdown-wrap">
+              <button class="icon-btn" id="btn-chat-options" title="More options" type="button">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="5" r="2"></circle>
+                  <circle cx="12" cy="12" r="2"></circle>
+                  <circle cx="12" cy="19" r="2"></circle>
+                </svg>
+              </button>
+              <div class="chat-options-menu hidden" id="chat-options-menu">
+                <button type="button" class="menu-item" id="menu-btn-profile">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                  <span>My Profile &amp; ID</span>
+                </button>
+                <button type="button" class="menu-item" id="menu-btn-clear-chat">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                  <span>Clear Chat</span>
+                </button>
+                <button type="button" class="menu-item text-danger" id="menu-btn-remove-active-user" style="display:none;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>
+                  <span>Remove User</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

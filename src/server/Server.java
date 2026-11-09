@@ -3,6 +3,7 @@ package server;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -222,6 +223,42 @@ public class Server {
         if (message.equalsIgnoreCase("exit")) {
             removeClient(sender);
             sender.close();
+            return;
+        }
+
+        // Remove / kick user: REMOVE_USER:targetUsername
+        if (message.startsWith("REMOVE_USER:")) {
+            String target = message.substring(12).trim();
+            ChatSession toRemove = findClient(target);
+            if (toRemove != null) {
+                System.out.println("🔴 Removing user " + target + " as requested by " + username);
+                clients.remove(toRemove);
+                try {
+                    toRemove.close();
+                } catch (Exception ignored) {}
+                broadcast("🔴 " + target + " was removed from the session.");
+            }
+            updateUserLists();
+            return;
+        }
+
+        // Clear all users: CLEAR_USERS or /clearusers
+        if (message.equalsIgnoreCase("CLEAR_USERS") || message.equalsIgnoreCase("/clearusers")) {
+            System.out.println("🧹 Clearing all other sessions as requested by " + username);
+            List<ChatSession> toPrune = new ArrayList<>();
+            for (ChatSession c : clients) {
+                if (c != sender) {
+                    toPrune.add(c);
+                }
+            }
+            for (ChatSession c : toPrune) {
+                clients.remove(c);
+                try {
+                    c.close();
+                } catch (Exception ignored) {}
+            }
+            updateUserLists();
+            sender.sendMessage("SYSTEM: All other user sessions have been cleared.");
             return;
         }
 
